@@ -1,9 +1,9 @@
 import { Routes, Route, useNavigate } from "react-router-dom";
 import { useState } from "react";
-import Sidebar from "../components/Sidebar";
+import Sidebar from "../components/Sidebar.jsx";
 import Dashboard from "../components/Dashboard.jsx";
-import Groups from "../components/Groups";
-import Activity from "../components/Activity";
+import Groups from "../components/Groups.jsx";
+import Activity from "../components/Activity.jsx";
 
 export default function HomePage({ user, setUser }) {
   const [currentView, setCurrentView] = useState('dashboard');

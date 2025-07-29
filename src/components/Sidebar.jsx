@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { 
   Home, 
   Users, 
@@ -14,11 +15,15 @@ import {
   X,
   Calendar,
   Receipt,
-  ChevronRight
+  ChevronRight,
+  LogOut
 } from "lucide-react";
+import { useAuth } from "../contexts/AuthContext.jsx";
 
 // Enhanced Sidebar Component
-export default function Sidebar({ currentView, setCurrentView, setUser, user }) {
+export default function Sidebar({ currentView, setCurrentView }) {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
@@ -27,6 +32,11 @@ export default function Sidebar({ currentView, setCurrentView, setUser, user }) 
     { icon: Users, label: "Groups", path: "groups" },
     { icon: Activity, label: "Activity", path: "activity" },
   ];
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
 
   const SidebarContent = () => (
     <div className="h-full flex flex-col bg-gradient-to-b from-teal-600 to-teal-700 text-white shadow-xl">
@@ -98,7 +108,13 @@ export default function Sidebar({ currentView, setCurrentView, setUser, user }) 
               <p className="text-teal-200 text-xs">{user?.email || 'user@example.com'}</p>
             </div>
           )}
-          
+          <button
+            onClick={handleLogout}
+            className="p-1 hover:bg-teal-500/30 rounded-md transition-colors"
+            title="Logout"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
         </div>
       </div>
     </div>

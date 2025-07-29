@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { 
   Home, 
   Users, 
@@ -16,22 +16,99 @@ import {
   Receipt,
   ChevronRight
 } from "lucide-react";
+import { getBudgetSummary, getUserBudgets } from "../services/budgetService";
+import { getExpenses } from "../services/expenseService";
+import { useAuth } from "../contexts/AuthContext.jsx";
 
-export default function Dashboard({ user }) {
-  const allExpenses = [
-    { title: "Dinner at Restaurant", user: "John", time: "2 hours ago", amount: "₹45.67", owed: "₹15.22", type: "expense" },
-    { title: "Grocery Shopping", user: "Sarah", time: "5 hours ago", amount: "₹87.34", owed: "₹29.11", type: "expense" },
-    { title: "Movie Tickets", user: "Mike", time: "1 day ago", amount: "₹36.00", owed: "₹12.00", type: "expense" },
-    { title: "Coffee & Snacks", user: "You", time: "2 days ago", amount: "₹18.50", owed: "settled", type: "settlement" }
-  ];
-
+export default function Dashboard() {
+  const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
+  const [budgetSummary, setBudgetSummary] = useState({
+    totalBudget: 0,
+    totalSpent: 0,
+    totalRemaining: 0,
+    overallPercentageUsed: 0
+  });
+  const [recentExpenses, setRecentExpenses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const filteredExpenses = allExpenses.filter(item =>
-    item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.user.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.time.toLowerCase().includes(searchTerm.toLowerCase())
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      
+      // Fetch budget summary
+      if (user?.id) {
+        const summaryResponse = await getBudgetSummary(user.id);
+        console.log('Budget summary response:', summaryResponse);
+        setBudgetSummary(summaryResponse.data || {
+          totalBudget: 0,
+          totalSpent: 0,
+          totalRemaining: 0,
+          overallPercentageUsed: 0
+        });
+      }
+
+      // Fetch recent expenses
+      const expensesResponse = await getExpenses(1); // Use default group ID
+      console.log('Expenses response:', expensesResponse);
+      setRecentExpenses(expensesResponse.data || []);
+    } catch (err) {
+      setError('Failed to fetch dashboard data');
+      console.error('Error fetching dashboard data:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredExpenses = recentExpenses.filter(item =>
+    (item.title || item.description || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (item.user || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (item.time || item.createdAt || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+            <p className="text-gray-600 mt-1">Track your expenses and balances</p>
+          </div>
+        </div>
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+            <p className="text-gray-600 mt-1">Track your expenses and balances</p>
+          </div>
+        </div>
+        <div className="text-center py-8">
+          <p className="text-red-600">{error}</p>
+          <button 
+            onClick={fetchDashboardData}
+            className="mt-4 bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -59,30 +136,30 @@ export default function Dashboard({ user }) {
         </div>
       </div>
 
-      {/* Balance Cards */}
+      {/* Budget Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-gradient-to-br from-green-500 to-green-600 p-6 rounded-xl text-white shadow-lg hover:shadow-xl transition-shadow">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-green-100 font-medium text-sm">You are owed</p>
-              <p className="text-3xl font-bold mt-1">₹1,234.56</p>
-              <p className="text-green-200 text-sm mt-2">↑ +12.5% from last month</p>
+              <p className="text-green-100 font-medium text-sm">Total Budget</p>
+              <p className="text-3xl font-bold mt-1">₹{budgetSummary.totalBudget || 0}</p>
+              <p className="text-green-200 text-sm mt-2">Monthly budget limit</p>
             </div>
             <div className="bg-green-400/30 p-3 rounded-lg">
-              <TrendingUp className="w-8 h-8 text-green-100" />
+              <DollarSign className="w-8 h-8 text-green-100" />
             </div>
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-red-500 to-red-600 p-6 rounded-xl text-white shadow-lg hover:shadow-xl transition-shadow">
+        <div className="bg-gradient-to-br from-orange-500 to-orange-600 p-6 rounded-xl text-white shadow-lg hover:shadow-xl transition-shadow">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-red-100 font-medium text-sm">You owe</p>
-              <p className="text-3xl font-bold mt-1">₹567.89</p>
-              <p className="text-red-200 text-sm mt-2">↓ -8.2% from last month</p>
+              <p className="text-orange-100 font-medium text-sm">Total Spent</p>
+              <p className="text-3xl font-bold mt-1">₹{budgetSummary.totalSpent || 0}</p>
+              <p className="text-orange-200 text-sm mt-2">{budgetSummary.overallPercentageUsed?.toFixed(1) || 0}% of budget used</p>
             </div>
-            <div className="bg-red-400/30 p-3 rounded-lg">
-              <DollarSign className="w-8 h-8 text-red-100" />
+            <div className="bg-orange-400/30 p-3 rounded-lg">
+              <TrendingUp className="w-8 h-8 text-orange-100" />
             </div>
           </div>
         </div>
@@ -90,9 +167,9 @@ export default function Dashboard({ user }) {
         <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-6 rounded-xl text-white shadow-lg hover:shadow-xl transition-shadow">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-blue-100 font-medium text-sm">Total balance</p>
-              <p className="text-3xl font-bold mt-1">₹666.67</p>
-              <p className="text-blue-200 text-sm mt-2">Net positive balance</p>
+              <p className="text-blue-100 font-medium text-sm">Remaining</p>
+              <p className="text-3xl font-bold mt-1">₹{budgetSummary.totalRemaining || 0}</p>
+              <p className="text-blue-200 text-sm mt-2">Available budget</p>
             </div>
             <div className="bg-blue-400/30 p-3 rounded-lg">
               <Activity className="w-8 h-8 text-blue-100" />
@@ -112,32 +189,40 @@ export default function Dashboard({ user }) {
             </button>
           </div>
         </div>
-        <div className="divide-y divide-gray-100">
-          {filteredExpenses.map((item, index) => (
-            <div key={index} className="flex items-center space-x-4 p-6 hover:bg-gray-50 transition-colors">
-              <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                item.type === 'expense' ? 'bg-orange-100' : 'bg-green-100'
-              }`}>
-                {item.type === 'expense' ? 
-                  <Receipt className="w-6 h-6 text-orange-600" /> :
-                  <DollarSign className="w-6 h-6 text-green-600" />
-                }
+        {filteredExpenses.length === 0 ? (
+          <div className="text-center py-12">
+            <Receipt className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No recent activity</h3>
+            <p className="text-gray-600">Start adding expenses to see your activity feed</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {filteredExpenses.map((item, index) => (
+              <div key={item.id || index} className="flex items-center space-x-4 p-6 hover:bg-gray-50 transition-colors">
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                  item.type === 'expense' ? 'bg-orange-100' : 'bg-green-100'
+                }`}>
+                  {item.type === 'expense' ? 
+                    <Receipt className="w-6 h-6 text-orange-600" /> :
+                    <DollarSign className="w-6 h-6 text-green-600" />
+                  }
+                </div>
+                <div className="flex-1">
+                  <p className="font-medium text-gray-900">{item.title || item.description}</p>
+                  <p className="text-sm text-gray-600">Added by {item.user || 'Unknown'} • {item.time || item.createdAt}</p>
+                </div>
+                <div className="text-right">
+                  <p className="font-semibold text-gray-900">₹{item.amount || 0}</p>
+                  {item.owed === 'settled' ? (
+                    <p className="text-sm text-gray-500">Settled</p>
+                  ) : (
+                    <p className="text-sm text-green-600">You are owed ₹{item.owed || 0}</p>
+                  )}
+                </div>
               </div>
-              <div className="flex-1">
-                <p className="font-medium text-gray-900">{item.title}</p>
-                <p className="text-sm text-gray-600">Added by {item.user} • {item.time}</p>
-              </div>
-              <div className="text-right">
-                <p className="font-semibold text-gray-900">{item.amount}</p>
-                {item.owed === 'settled' ? (
-                  <p className="text-sm text-gray-500">Settled</p>
-                ) : (
-                  <p className="text-sm text-green-600">You are owed {item.owed}</p>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

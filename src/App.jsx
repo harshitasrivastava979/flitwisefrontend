@@ -1,33 +1,44 @@
-import { useEffect, useState } from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
-import LoginPage from "./pages/LoginPage";
-import HomePage from "./pages/HomePage";
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { useAuth } from './contexts/AuthContext.jsx';
+import Dashboard from './pages/HomePage.jsx';
+import Groups from './components/Groups.jsx';
+import Expenses from './components/Activity.jsx';
+import Budget from './pages/Budget.jsx';
+import Profile from './pages/Profile.jsx';
+import LoginPage from './pages/LoginPage.jsx';
 
-export default function App() {
-  const [user, setUser] = useState(() => {
-    const savedUser = localStorage.getItem("user");
-    return savedUser ? JSON.parse(savedUser) : null;
-  });
-
-  useEffect(() => {
-    if (user) localStorage.setItem("user", JSON.stringify(user));
-    else localStorage.removeItem("user");
-  }, [user]);
+function App() {
+  const { isAuthenticated } = useAuth();
 
   return (
     <Router>
-      <div className="min-h-screen bg-gray-50">
-        <Routes>
-          <Route
-            path="/"
-            element={user ? <Navigate to="/home" /> : <LoginPage setUser={setUser} />}
-          />
-          <Route
-            path="/home/*"
-            element={user ? <HomePage user={user} setUser={setUser} /> : <Navigate to="/" />}
-          />
-        </Routes>
-      </div>
+      <Routes>
+        {/* Public routes */}
+        <Route path="/login" element={<LoginPage />} />
+        
+        {/* Protected routes - redirect to login if not authenticated */}
+        <Route path="/" element={
+          isAuthenticated() ? <Dashboard /> : <Navigate to="/login" replace />
+        } />
+        <Route path="/groups" element={
+          isAuthenticated() ? <Groups /> : <Navigate to="/login" replace />
+        } />
+        <Route path="/expenses" element={
+          isAuthenticated() ? <Expenses /> : <Navigate to="/login" replace />
+        } />
+        <Route path="/budget" element={
+          isAuthenticated() ? <Budget /> : <Navigate to="/login" replace />
+        } />
+        <Route path="/profile" element={
+          isAuthenticated() ? <Profile /> : <Navigate to="/login" replace />
+        } />
+        
+        {/* Catch all route */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
     </Router>
   );
 }
+
+export default App;
