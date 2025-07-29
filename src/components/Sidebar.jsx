@@ -19,6 +19,7 @@ import {
   LogOut
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext.jsx";
+import BackendStatus from "./BackendStatus.jsx";
 
 // Enhanced Sidebar Component
 export default function Sidebar({ currentView, setCurrentView }) {
@@ -95,6 +96,15 @@ export default function Sidebar({ currentView, setCurrentView }) {
           ))}
         </ul>
       </nav>
+
+      {/* Backend Status */}
+      {!isCollapsed && (
+        <div className="px-4 py-2">
+          <div className="bg-teal-500/20 rounded-lg p-2">
+            <BackendStatus />
+          </div>
+        </div>
+      )}
 
       {/* User Profile */}
       <div className="p-4 border-t border-teal-500/30">

@@ -7,7 +7,9 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { createGroup, getGroups } from "../services/groupService";
+import { checkBackendHealth } from "../services/api";
 import { useAuth } from "../contexts/AuthContext.jsx";
+import TroubleshootingGuide from "./TroubleshootingGuide.jsx";
 
 export default function Groups() {
   const navigate = useNavigate();
@@ -15,27 +17,50 @@ export default function Groups() {
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [backendStatus, setBackendStatus] = useState('checking');
 
   const [showModal, setShowModal] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
+  const [showTroubleshooting, setShowTroubleshooting] = useState(false);
 
   useEffect(() => {
-    fetchGroups();
+    checkBackendAndFetchGroups();
   }, []);
+
+  const checkBackendAndFetchGroups = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // First check if backend is accessible
+      const isBackendHealthy = await checkBackendHealth();
+      setBackendStatus(isBackendHealthy ? 'connected' : 'disconnected');
+      
+      if (!isBackendHealthy) {
+        setError('Backend server is not accessible. Please ensure the backend is running on port 8080.');
+        return;
+      }
+      
+      // If backend is healthy, fetch groups
+      await fetchGroups();
+    } catch (err) {
+      setError('Failed to connect to backend server');
+      console.error('Error checking backend:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchGroups = async () => {
     try {
-      setLoading(true);
       const response = await getGroups();
       console.log('Groups response:', response);
       // Since we're using the users endpoint temporarily, we'll treat users as groups
       const groupsData = response.data || [];
       setGroups(groupsData);
     } catch (err) {
-      setError('Failed to fetch groups');
+      setError('Failed to fetch groups: ' + (err.response?.data?.message || err.message));
       console.error('Error fetching groups:', err);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -97,13 +122,35 @@ export default function Groups() {
           </div>
         </div>
         <div className="text-center py-8">
-          <p className="text-red-600">{error}</p>
-          <button 
-            onClick={fetchGroups}
-            className="mt-4 bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700"
-          >
-            Retry
-          </button>
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md mx-auto">
+            <div className="flex items-center justify-center mb-4">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                <Users className="w-6 h-6 text-red-600" />
+              </div>
+            </div>
+            <h3 className="text-lg font-medium text-red-800 mb-2">Connection Error</h3>
+            <p className="text-red-700 mb-4">{error}</p>
+            <div className="space-y-2 text-sm text-red-600">
+              <p>Backend Status: <span className={`font-medium ${backendStatus === 'connected' ? 'text-green-600' : 'text-red-600'}`}>
+                {backendStatus === 'connected' ? 'Connected' : backendStatus === 'disconnected' ? 'Disconnected' : 'Checking...'}
+              </span></p>
+              <p>API URL: http://localhost:8080</p>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3 mt-4">
+              <button 
+                onClick={checkBackendAndFetchGroups}
+                className="bg-teal-600 text-white px-6 py-2 rounded-lg hover:bg-teal-700 font-medium"
+              >
+                Retry Connection
+              </button>
+              <button 
+                onClick={() => setShowTroubleshooting(true)}
+                className="bg-gray-600 text-white px-6 py-2 rounded-lg hover:bg-gray-700 font-medium"
+              >
+                Troubleshooting Guide
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -205,6 +252,12 @@ export default function Groups() {
           </div>
         </div>
       )}
+
+      {/* Troubleshooting Guide */}
+      <TroubleshootingGuide 
+        isVisible={showTroubleshooting} 
+        onClose={() => setShowTroubleshooting(false)} 
+      />
     </div>
   );
 }

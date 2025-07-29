@@ -52,8 +52,6 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody Map<String, String> loginRequest) {
-        System.out.println("Login request received: " + loginRequest); // Debug log
-        
         try {
             Authentication authentication = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(
@@ -66,10 +64,7 @@ public class AuthController {
             
             // Get user data using the authenticated username (email)
             String authenticatedEmail = authentication.getName();
-            System.out.println("Authenticated email: " + authenticatedEmail); // Debug log
-            
             Users user = userRepo.findByMail(authenticatedEmail).orElse(null);
-            System.out.println("Found user: " + user); // Debug log
             
             Map<String, Object> response = new HashMap<>();
             response.put("token", jwt);
@@ -80,50 +75,30 @@ public class AuthController {
                 userData.put("name", user.getName());
                 userData.put("email", user.getMail());
                 response.put("user", userData);
-                System.out.println("User data added to response: " + userData); // Debug log
             } else {
-                System.out.println("ERROR: User not found in database after authentication!"); // Debug log
-                System.out.println("Trying to find user with email: " + authenticatedEmail); // Debug log
-                
-                // Try to find the user with the original email from request
-                user = userRepo.findByMail(loginRequest.get("mail")).orElse(null);
-                System.out.println("User found with original email: " + user); // Debug log
-                
-                if (user != null) {
-                    Map<String, Object> userData = new HashMap<>();
-                    userData.put("id", user.getId());
-                    userData.put("name", user.getName());
-                    userData.put("email", user.getMail());
-                    response.put("user", userData);
-                    System.out.println("User data added to response (fallback): " + userData); // Debug log
-                } else {
-                    return ResponseEntity.status(500).body("User data not found");
-                }
+                return ResponseEntity.status(500).body("User data not found");
             }
             
-            System.out.println("Sending response: " + response); // Debug log
             return ResponseEntity.ok(response);
             
         } catch (Exception e) {
-            System.out.println("Authentication error: " + e.getMessage()); // Debug log
-            e.printStackTrace();
             return ResponseEntity.status(401).body("Invalid credentials");
         }
     }
     
     @GetMapping("/debug/user/{email}")
     public ResponseEntity<?> debugUser(@PathVariable String email) {
-        System.out.println("Debug request for email: " + email); // Debug log
         Users user = userRepo.findByMail(email).orElse(null);
         if (user != null) {
             Map<String, Object> userData = new HashMap<>();
             userData.put("id", user.getId());
             userData.put("name", user.getName());
             userData.put("email", user.getMail());
-            userData.put("password", user.getPassword());
             return ResponseEntity.ok(userData);
         } else {
             return ResponseEntity.ok("User not found");
         }
     }
+    
+
 } 

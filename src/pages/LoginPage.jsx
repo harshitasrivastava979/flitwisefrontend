@@ -40,14 +40,9 @@ export default function LoginPage() {
           password,
         });
 
-        console.log('Login response:', response); // Debug log
-
         // Extract token and user from response
         const token = response.data.token;
         const userData = response.data.user;
-        
-        console.log('Token:', token); // Debug log
-        console.log('User data:', userData); // Debug log
         
         if (token && userData) {
           const user = {
@@ -56,11 +51,9 @@ export default function LoginPage() {
             email: userData.email
           };
           
-          console.log('Processed user:', user); // Debug log
           authLogin(user, token);
           navigate('/'); // Redirect to dashboard
         } else {
-          console.error('Missing token or user data in response:', response.data); // Debug log
           setError("Invalid response from server - missing token or user data");
         }
       }
