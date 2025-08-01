@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { 
   Home, 
   Users, 
@@ -14,14 +15,21 @@ import {
   X,
   Calendar,
   Receipt,
-  ChevronRight
+  ChevronRight,
+  PieChart,
+  AlertTriangle,
+  CheckCircle,
+  ArrowUpRight,
+  ArrowDownRight
 } from "lucide-react";
-import { getBudgetSummary, getUserBudgets } from "../services/budgetService";
+import { getBudgetSummary, getUserBudgets, getExceededBudgets, getNearingLimit } from "../services/budgetService";
 import { getExpenses } from "../services/expenseService";
+import { getGroups } from "../services/groupService";
 import { useAuth } from "../contexts/AuthContext.jsx";
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
   const [budgetSummary, setBudgetSummary] = useState({
     totalBudget: 0,
@@ -30,36 +38,123 @@ export default function Dashboard() {
     overallPercentageUsed: 0
   });
   const [recentExpenses, setRecentExpenses] = useState([]);
+  const [userGroups, setUserGroups] = useState([]);
+  const [exceededBudgets, setExceededBudgets] = useState([]);
+  const [nearingLimitBudgets, setNearingLimitBudgets] = useState([]);
+  const [userStats, setUserStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+  }, [user]);
 
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
+      setError(null);
       
-      // Fetch budget summary
-      if (user?.id) {
-        const summaryResponse = await getBudgetSummary(user.id);
-        console.log('Budget summary response:', summaryResponse);
-        setBudgetSummary(summaryResponse.data || {
+      console.log('Dashboard fetchDashboardData - user:', user);
+      console.log('Dashboard fetchDashboardData - user.id:', user?.id);
+      
+      // Handle different possible user object structures
+      const userId = user?.id || user?.userId || null;
+      console.log('Dashboard fetchDashboardData - resolved userId:', userId);
+      
+      if (userId) {
+        // Test basic API connectivity first
+        try {
+          console.log('Testing basic API connectivity...');
+          const testResponse = await getGroups();
+          console.log('Basic API test successful:', testResponse);
+        } catch (err) {
+          console.error('Basic API test failed:', err);
+          setError('Unable to connect to the server. Please check your connection.');
+          setLoading(false);
+          return;
+        }
+
+        // Make API calls individually to handle failures gracefully
+        try {
+          console.log('Fetching budget summary for user:', userId);
+          const summaryResponse = await getBudgetSummary(userId);
+          console.log('Budget summary response:', summaryResponse);
+          setBudgetSummary(summaryResponse.data || {
+            totalBudget: 0,
+            totalSpent: 0,
+            totalRemaining: 0,
+            overallPercentageUsed: 0
+          });
+        } catch (err) {
+          console.warn('Failed to fetch budget summary:', err);
+          setBudgetSummary({
+            totalBudget: 0,
+            totalSpent: 0,
+            totalRemaining: 0,
+            overallPercentageUsed: 0
+          });
+        }
+
+        try {
+          console.log('Fetching groups');
+          const groupsResponse = await getGroups();
+          console.log('Groups response:', groupsResponse);
+          setUserGroups(groupsResponse.data || []);
+        } catch (err) {
+          console.warn('Failed to fetch groups:', err);
+          setUserGroups([]);
+        }
+
+        try {
+          console.log('Fetching expenses');
+          const expensesResponse = await getExpenses(1); // Use default group ID
+          console.log('Expenses response:', expensesResponse);
+          setRecentExpenses(expensesResponse.data || []);
+        } catch (err) {
+          console.warn('Failed to fetch expenses:', err);
+          setRecentExpenses([]);
+        }
+
+        try {
+          console.log('Fetching exceeded budgets for user:', userId);
+          const exceededResponse = await getExceededBudgets(userId);
+          console.log('Exceeded budgets response:', exceededResponse);
+          setExceededBudgets(exceededResponse.data || []);
+        } catch (err) {
+          console.warn('Failed to fetch exceeded budgets:', err);
+          setExceededBudgets([]);
+        }
+
+        try {
+          console.log('Fetching nearing limit budgets for user:', userId);
+          const nearingResponse = await getNearingLimit(userId);
+          console.log('Nearing limit response:', nearingResponse);
+          setNearingLimitBudgets(nearingResponse.data || []);
+        } catch (err) {
+          console.warn('Failed to fetch nearing limit budgets:', err);
+          setNearingLimitBudgets([]);
+        }
+
+        // Note: getUserSummary endpoint doesn't exist in backend yet
+        setUserStats(null);
+      } else {
+        console.log('No user ID found, setting default values');
+        // If no user ID, set default values
+        setBudgetSummary({
           totalBudget: 0,
           totalSpent: 0,
           totalRemaining: 0,
           overallPercentageUsed: 0
         });
+        setUserGroups([]);
+        setRecentExpenses([]);
+        setExceededBudgets([]);
+        setNearingLimitBudgets([]);
+        setUserStats(null);
       }
-
-      // Fetch recent expenses
-      const expensesResponse = await getExpenses(1); // Use default group ID
-      console.log('Expenses response:', expensesResponse);
-      setRecentExpenses(expensesResponse.data || []);
     } catch (err) {
+      console.error('Error in fetchDashboardData:', err);
       setError('Failed to fetch dashboard data');
-      console.error('Error fetching dashboard data:', err);
     } finally {
       setLoading(false);
     }
@@ -70,6 +165,10 @@ export default function Dashboard() {
     (item.user || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     (item.time || item.createdAt || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const handleViewAllGroups = () => {
+    navigate('/groups');
+  };
 
   if (loading) {
     return (
@@ -115,8 +214,8 @@ export default function Dashboard() {
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-600 mt-1">Track your expenses and balances</p>
+          <h1 className="text-3xl font-bold text-gray-900">Welcome back, {user?.name || 'User'}!</h1>
+          <p className="text-gray-600 mt-1">Here's what's happening with your expenses</p>
         </div>
         <div className="flex items-center space-x-3">
           <div className="relative">
@@ -131,13 +230,44 @@ export default function Dashboard() {
           </div>
           <button className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors relative">
             <Bell className="w-5 h-5" />
-            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">3</span>
+            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+              {exceededBudgets.length + nearingLimitBudgets.length}
+            </span>
           </button>
         </div>
       </div>
 
-      {/* Budget Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* Alerts */}
+      {exceededBudgets.length > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex items-center space-x-3">
+            <AlertTriangle className="w-5 h-5 text-red-600" />
+            <div>
+              <h3 className="text-sm font-medium text-red-800">Budget Alerts</h3>
+              <p className="text-sm text-red-700">
+                You have {exceededBudgets.length} budget(s) that have exceeded their limits.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {nearingLimitBudgets.length > 0 && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <div className="flex items-center space-x-3">
+            <TrendingUp className="w-5 h-5 text-yellow-600" />
+            <div>
+              <h3 className="text-sm font-medium text-yellow-800">Budget Warnings</h3>
+              <p className="text-sm text-yellow-700">
+                You have {nearingLimitBudgets.length} budget(s) nearing their limits.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Main Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="bg-gradient-to-br from-green-500 to-green-600 p-6 rounded-xl text-white shadow-lg hover:shadow-xl transition-shadow">
           <div className="flex items-center justify-between">
             <div>
@@ -176,7 +306,58 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+
+        <div className="bg-gradient-to-br from-purple-500 to-purple-600 p-6 rounded-xl text-white shadow-lg hover:shadow-xl transition-shadow">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-purple-100 font-medium text-sm">Groups</p>
+              <p className="text-3xl font-bold mt-1">{userGroups.length}</p>
+              <p className="text-purple-200 text-sm mt-2">Active groups</p>
+            </div>
+            <div className="bg-purple-400/30 p-3 rounded-lg">
+              <Users className="w-8 h-8 text-purple-100" />
+            </div>
+          </div>
+        </div>
       </div>
+
+      {/* Groups Overview */}
+      {userGroups.length > 0 && (
+        <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
+          <div className="p-6 border-b border-gray-100 bg-gray-50/50">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-gray-900">Your Groups</h2>
+              <button 
+                onClick={handleViewAllGroups}
+                className="text-teal-600 hover:text-teal-700 text-sm font-medium flex items-center space-x-1 transition-colors"
+              >
+                <span>View all</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+          <div className="p-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {userGroups.slice(0, 6).map((group, index) => (
+                <div key={group.id || index} className="bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition-colors cursor-pointer">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-medium text-gray-900">{group.name}</h3>
+                    <span className="text-xs text-gray-500">{group.usersList?.length || 0} members</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600">Total spent</span>
+                    <span className="font-semibold text-gray-900">₹{group.totalSpending || 0}</span>
+                  </div>
+                  <div className="flex items-center justify-between mt-1">
+                    <span className="text-sm text-gray-600">Expenses</span>
+                    <span className="text-sm text-gray-900">{group.expenses?.length || 0}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Recent Activity */}
       <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
@@ -197,7 +378,7 @@ export default function Dashboard() {
           </div>
         ) : (
           <div className="divide-y divide-gray-100">
-            {filteredExpenses.map((item, index) => (
+            {filteredExpenses.slice(0, 10).map((item, index) => (
               <div key={item.id || index} className="flex items-center space-x-4 p-6 hover:bg-gray-50 transition-colors">
                 <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
                   item.type === 'expense' ? 'bg-orange-100' : 'bg-green-100'
@@ -209,14 +390,25 @@ export default function Dashboard() {
                 </div>
                 <div className="flex-1">
                   <p className="font-medium text-gray-900">{item.title || item.description}</p>
-                  <p className="text-sm text-gray-600">Added by {item.user || 'Unknown'} • {item.time || item.createdAt}</p>
+                  <p className="text-sm text-gray-600">
+                    {item.groupName ? `${item.groupName} • ` : ''}
+                    {item.time || item.createdAt}
+                  </p>
                 </div>
                 <div className="text-right">
                   <p className="font-semibold text-gray-900">₹{item.amount || 0}</p>
                   {item.owed === 'settled' ? (
-                    <p className="text-sm text-gray-500">Settled</p>
+                    <p className="text-sm text-green-600 flex items-center">
+                      <CheckCircle className="w-3 h-3 mr-1" />
+                      Settled
+                    </p>
+                  ) : item.owed && item.owed !== 'You paid' ? (
+                    <p className="text-sm text-blue-600 flex items-center">
+                      <ArrowUpRight className="w-3 h-3 mr-1" />
+                      You owe ₹{item.owed}
+                    </p>
                   ) : (
-                    <p className="text-sm text-green-600">You are owed ₹{item.owed || 0}</p>
+                    <p className="text-sm text-gray-500">You paid</p>
                   )}
                 </div>
               </div>

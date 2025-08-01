@@ -20,4 +20,8 @@ public interface GroupService {
             GroupNotFoundException, UserNotMemberOfGroupException;
 
     List<ExpenseDTO> getExpensesByFilter(Integer groupId, String category, String startDate, String endDate);
+    
+    List<GroupCreationResponseDTO> getAllGroups();
+    
+    void deleteGroup(int groupId) throws GroupNotFoundException;
 }

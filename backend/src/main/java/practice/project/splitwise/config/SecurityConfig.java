@@ -78,7 +78,7 @@ public class SecurityConfig {
             .authenticationProvider(authenticationProvider())
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/**", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/swagger-resources/**", "/webjars/**", "/actuator/**", "/error").permitAll()
-                .requestMatchers("/createGroup", "/addExpense", "/expenses", "/settleUp/**").permitAll() // Allow group endpoints for development
+                .requestMatchers("/createGroup", "/addExpense", "/expenses", "/settleUp/**", "/groups/**").permitAll() // Allow group endpoints for development
                 .requestMatchers("/api/budget/**").permitAll() // Allow budget endpoints for development
                 .requestMatchers("/api/users/**").permitAll() // Allow user endpoints for development
                 .anyRequest().authenticated()

@@ -12,6 +12,7 @@ import practice.project.splitwise.service.GroupService;
 import java.util.List;
 
 @RestController
+@RequestMapping("/api")
 public class GroupController {
     @Autowired
     private GroupService groupService;
@@ -50,5 +51,21 @@ public class GroupController {
             @RequestParam(required = false) String endDate) {
         List<ExpenseDTO> expenses = groupService.getExpensesByFilter(groupId, category, startDate, endDate);
         return ResponseEntity.ok(expenses);
+    }
+    
+    @GetMapping("/groups")
+    public ResponseEntity<List<GroupCreationResponseDTO>> getAllGroups() {
+        List<GroupCreationResponseDTO> groups = groupService.getAllGroups();
+        return ResponseEntity.ok(groups);
+    }
+    
+    @DeleteMapping("/groups/{groupId}")
+    public ResponseEntity<String> deleteGroup(@PathVariable int groupId) {
+        try {
+            groupService.deleteGroup(groupId);
+            return ResponseEntity.ok("Group deleted successfully");
+        } catch (GroupNotFoundException e) {
+            return ResponseEntity.notFound().build();
+        }
     }
 }

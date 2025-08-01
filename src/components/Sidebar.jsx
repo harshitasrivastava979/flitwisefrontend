@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { 
   Home, 
   Users, 
@@ -20,23 +20,37 @@ import {
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext.jsx";
 import BackendStatus from "./BackendStatus.jsx";
+import AddExpenseModal from "./AddExpenseModal.jsx";
 
 // Enhanced Sidebar Component
-export default function Sidebar({ currentView, setCurrentView }) {
+export default function Sidebar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [showAddExpenseModal, setShowAddExpenseModal] = useState(false);
 
   const menuItems = [
-    { icon: Home, label: "Dashboard", path: "dashboard" },
-    { icon: Users, label: "Groups", path: "groups" },
-    { icon: Activity, label: "Activity", path: "activity" },
+    { icon: Home, label: "Dashboard", path: "/" },
+    { icon: Users, label: "Groups", path: "/groups" },
+    { icon: TrendingUp, label: "Budgets", path: "/budgets" },
+    { icon: Activity, label: "Activity", path: "/expenses" },
   ];
 
   const handleLogout = () => {
     logout();
     navigate('/login');
+  };
+
+  const handleAddExpense = () => {
+    setShowAddExpenseModal(true);
+  };
+
+  const handleExpenseAdded = (expense) => {
+    // Refresh the current view or show a success message
+    console.log('Expense added:', expense);
+    // You could add a toast notification here
   };
 
   const SidebarContent = () => (
@@ -67,7 +81,10 @@ export default function Sidebar({ currentView, setCurrentView }) {
 
       {/* Add Expense Button */}
       <div className="p-4">
-        <button className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 px-4 rounded-lg flex items-center justify-center space-x-2 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5">
+        <button 
+          onClick={handleAddExpense}
+          className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 px-4 rounded-lg flex items-center justify-center space-x-2 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+        >
           <Plus className="w-5 h-5" />
           {!isCollapsed && <span>Add expense</span>}
         </button>
@@ -80,11 +97,11 @@ export default function Sidebar({ currentView, setCurrentView }) {
             <li key={index}>
               <button
                 onClick={() => {
-                  setCurrentView(item.path);
+                  navigate(item.path);
                   setIsMobileOpen(false);
                 }}
                 className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200 ${
-                  currentView === item.path 
+                  location.pathname === item.path 
                     ? 'bg-teal-500/40 text-white shadow-md' 
                     : 'text-teal-100 hover:bg-teal-500/20 hover:text-white'
                 }`}
@@ -156,6 +173,13 @@ export default function Sidebar({ currentView, setCurrentView }) {
       >
         <Menu className="w-5 h-5" />
       </button>
+
+      {/* Add Expense Modal */}
+      <AddExpenseModal
+        isOpen={showAddExpenseModal}
+        onClose={() => setShowAddExpenseModal(false)}
+        onExpenseAdded={handleExpenseAdded}
+      />
     </>
   );
 }

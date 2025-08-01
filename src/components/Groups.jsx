@@ -2,81 +2,90 @@ import {
   Users, 
   Plus, 
   Trash2, 
-  ChevronRight 
+  ChevronRight,
+  Receipt,
+  DollarSign,
+  Calendar
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { createGroup, getGroups } from "../services/groupService";
-import { checkBackendHealth } from "../services/api";
+import { createGroup, getGroups, deleteGroup } from "../services/groupService";
+import { getExpenses } from "../services/expenseService";
 import { useAuth } from "../contexts/AuthContext.jsx";
-import TroubleshootingGuide from "./TroubleshootingGuide.jsx";
 
 export default function Groups() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [groups, setGroups] = useState([]);
+  const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [backendStatus, setBackendStatus] = useState('checking');
 
   const [showModal, setShowModal] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
-  const [showTroubleshooting, setShowTroubleshooting] = useState(false);
+  const [users, setUsers] = useState([{ name: user?.name || '', mail: user?.mail || '' }]);
+
+  const isCurrentUserEditable = !(user?.name && user?.mail);
 
   useEffect(() => {
-    checkBackendAndFetchGroups();
+    fetchGroups();
+    fetchExpenses();
   }, []);
 
-  const checkBackendAndFetchGroups = async () => {
+  const fetchGroups = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      // First check if backend is accessible
-      const isBackendHealthy = await checkBackendHealth();
-      setBackendStatus(isBackendHealthy ? 'connected' : 'disconnected');
-      
-      if (!isBackendHealthy) {
-        setError('Backend server is not accessible. Please ensure the backend is running on port 8080.');
-        return;
-      }
-      
-      // If backend is healthy, fetch groups
-      await fetchGroups();
-    } catch (err) {
-      setError('Failed to connect to backend server');
-      console.error('Error checking backend:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchGroups = async () => {
-    try {
       const response = await getGroups();
       console.log('Groups response:', response);
-      // Since we're using the users endpoint temporarily, we'll treat users as groups
       const groupsData = response.data || [];
       setGroups(groupsData);
     } catch (err) {
       setError('Failed to fetch groups: ' + (err.response?.data?.message || err.message));
       console.error('Error fetching groups:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
+  const fetchExpenses = async () => {
+    try {
+      const response = await getExpenses();
+      console.log('Expenses response:', response);
+      setExpenses(response.data || []);
+    } catch (err) {
+      console.error('Error fetching expenses:', err);
+      setExpenses([]);
+    }
+  };
+
+  const handleUserChange = (index, field, value) => {
+    const updated = [...users];
+    updated[index][field] = value;
+    setUsers(updated);
+  };
+
+  const addUserField = () => setUsers([...users, { name: '', mail: '' }]);
+
+  const removeUserField = (index) => {
+    if (index === 0) return; // Prevent removing the current user
+    setUsers(users.filter((_, i) => i !== index));
+  };
+
   const handleCreateGroup = async () => {
-    if (newGroupName.trim()) {
+    if (newGroupName.trim() && users.every(u => u.name.trim() && u.mail.trim())) {
       try {
         const groupData = {
           name: newGroupName,
           description: `Group created by ${user?.name || 'User'}`,
           currency: 'INR',
-          usersList: [user] // Add current user to the group
+          usersList: users
         };
         const response = await createGroup(groupData);
-        console.log('Create group response:', response);
         setGroups([...groups, response.data]);
         setNewGroupName('');
+        setUsers([{ name: user?.name || '', mail: user?.mail || '' }]);
         setShowModal(false);
       } catch (err) {
         setError('Failed to create group');
@@ -85,14 +94,33 @@ export default function Groups() {
     }
   };
 
-  const handleDelete = (index) => {
-    const updated = [...groups];
-    updated.splice(index, 1);
-    setGroups(updated);
+  const handleDelete = async (groupId) => {
+    try {
+      await deleteGroup(groupId);
+      // Remove the group from the local state
+      setGroups(groups.filter(group => group.id !== groupId));
+    } catch (err) {
+      setError('Failed to delete group');
+      console.error('Error deleting group:', err);
+    }
   };
 
   const handleViewDetails = (groupName) => {
     navigate(`/groups/${encodeURIComponent(groupName)}`);
+  };
+
+  const getGroupExpenses = (groupId) => {
+    return expenses.filter(expense => expense.groupID === groupId).slice(0, 3);
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric',
+      year: 'numeric'
+    });
   };
 
   if (loading) {
@@ -128,28 +156,14 @@ export default function Groups() {
                 <Users className="w-6 h-6 text-red-600" />
               </div>
             </div>
-            <h3 className="text-lg font-medium text-red-800 mb-2">Connection Error</h3>
+            <h3 className="text-lg font-medium text-red-800 mb-2">Error</h3>
             <p className="text-red-700 mb-4">{error}</p>
-            <div className="space-y-2 text-sm text-red-600">
-              <p>Backend Status: <span className={`font-medium ${backendStatus === 'connected' ? 'text-green-600' : 'text-red-600'}`}>
-                {backendStatus === 'connected' ? 'Connected' : backendStatus === 'disconnected' ? 'Disconnected' : 'Checking...'}
-              </span></p>
-              <p>API URL: http://localhost:8080</p>
-            </div>
-            <div className="flex flex-col sm:flex-row gap-3 mt-4">
-              <button 
-                onClick={checkBackendAndFetchGroups}
-                className="bg-teal-600 text-white px-6 py-2 rounded-lg hover:bg-teal-700 font-medium"
-              >
-                Retry Connection
-              </button>
-              <button 
-                onClick={() => setShowTroubleshooting(true)}
-                className="bg-gray-600 text-white px-6 py-2 rounded-lg hover:bg-gray-700 font-medium"
-              >
-                Troubleshooting Guide
-              </button>
-            </div>
+            <button 
+              onClick={fetchGroups}
+              className="bg-teal-600 text-white px-6 py-2 rounded-lg hover:bg-teal-700 font-medium"
+            >
+              Retry
+            </button>
           </div>
         </div>
       </div>
@@ -186,47 +200,116 @@ export default function Groups() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {groups.map((group, index) => (
-            <div key={group.id || index} className="bg-white rounded-xl shadow-lg border border-gray-100 hover:shadow-xl transition-all duration-200 hover:-translate-y-1 relative">
-              <div className="h-2 bg-gradient-to-r from-teal-500 to-teal-600"></div>
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-12 h-12 bg-gradient-to-r from-teal-500 to-teal-600 rounded-lg flex items-center justify-center">
-                      <Users className="w-6 h-6 text-white" />
+          {groups.map((group, index) => {
+            const groupExpenses = getGroupExpenses(group.id);
+            return (
+              <div key={group.id || index} className="bg-white rounded-xl shadow-lg border border-gray-100 hover:shadow-xl transition-all duration-200 hover:-translate-y-1 relative">
+                <div className="h-2 bg-gradient-to-r from-teal-500 to-teal-600"></div>
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-12 h-12 bg-gradient-to-r from-teal-500 to-teal-600 rounded-lg flex items-center justify-center">
+                        <Users className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-gray-900 text-lg">{group.name}</h3>
+                        <p className="text-sm text-gray-600">{group.usersList?.length || 0} members</p>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-900 text-lg">{group.name}</h3>
-                      <p className="text-sm text-gray-600">{group.members || 1} members</p>
+                    <Trash2
+                      onClick={() => handleDelete(group.id)}
+                      className="w-5 h-5 text-red-500 hover:text-red-700 cursor-pointer"
+                    />
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                      <span className="text-sm font-medium text-gray-700">Total Spending:</span>
+                      <span className="text-sm font-bold text-gray-900">₹{group.totalSpending || 0}</span>
+                    </div>
+                    <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
+                      <span className="text-sm font-medium text-gray-700">Currency:</span>
+                      <span className="text-sm font-bold text-blue-600">{group.currency || 'INR'}</span>
                     </div>
                   </div>
-                  <Trash2
-                    onClick={() => handleDelete(index)}
-                    className="w-5 h-5 text-red-500 hover:text-red-700 cursor-pointer"
-                  />
-                </div>
 
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
-                    <span className="text-sm font-medium text-gray-700">You owe:</span>
-                    <span className="text-sm font-bold text-red-600">₹{group.youOwe || 0}</span>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
-                    <span className="text-sm font-medium text-gray-700">You are owed:</span>
-                    <span className="text-sm font-bold text-green-600">₹{group.youAreOwed || 0}</span>
-                  </div>
-                </div>
+                  {/* Recent Expenses Section */}
+                  {groupExpenses.length > 0 && (
+                    <div className="mt-4">
+                      <h4 className="text-sm font-medium text-gray-700 mb-2 flex items-center">
+                        <Receipt className="w-4 h-4 mr-1" />
+                        Recent Expenses
+                      </h4>
+                      <div className="space-y-2">
+                        {groupExpenses.map((expense, expIndex) => (
+                          <div key={expense.id || expIndex} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-900 truncate">
+                                {expense.description || expense.title || 'Expense'}
+                              </p>
+                              <p className="text-xs text-gray-500 flex items-center">
+                                <Calendar className="w-3 h-3 mr-1" />
+                                {formatDate(expense.timestamp || expense.createdAt)}
+                              </p>
+                            </div>
+                            <div className="text-right ml-2">
+                              <p className="text-sm font-semibold text-gray-900">₹{expense.amount || 0}</p>
+                              <p className="text-xs text-gray-500">
+                                {expense.paidBy?.name || expense.userName || 'Unknown'}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
-                <button
-                  onClick={() => handleViewDetails(group.name)}
-                  className="w-full mt-4 text-teal-600 hover:text-teal-700 hover:bg-teal-50 py-2 px-4 rounded-lg transition-colors text-sm font-medium flex justify-center items-center space-x-2"
-                >
-                  <span>View Details</span>
-                  <ChevronRight className="w-4 h-4" />
-                </button>
+                  <button
+                    onClick={() => handleViewDetails(group.name)}
+                    className="w-full mt-4 text-teal-600 hover:text-teal-700 hover:bg-teal-50 py-2 px-4 rounded-lg transition-colors text-sm font-medium flex justify-center items-center space-x-2"
+                  >
+                    <span>View Details</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* All Expenses Section */}
+      {expenses.length > 0 && (
+        <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
+          <div className="p-6 border-b border-gray-100 bg-gray-50/50">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-gray-900">All Expenses</h2>
+              <span className="text-sm text-gray-600">{expenses.length} total expenses</span>
             </div>
-          ))}
+          </div>
+          <div className="divide-y divide-gray-100">
+            {expenses.slice(0, 10).map((expense, index) => (
+              <div key={expense.id || index} className="flex items-center space-x-4 p-6 hover:bg-gray-50 transition-colors">
+                <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
+                  <Receipt className="w-6 h-6 text-orange-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-gray-900 truncate">
+                    {expense.description || expense.title || 'Expense'}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    {expense.groupName || 'Unknown Group'} • {formatDate(expense.timestamp || expense.createdAt)}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="font-semibold text-gray-900">₹{expense.amount || 0}</p>
+                  <p className="text-sm text-gray-500">
+                    {expense.paidBy?.name || expense.userName || 'Unknown'}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -241,6 +324,33 @@ export default function Groups() {
               placeholder="Enter group name"
               className="w-full border border-gray-300 rounded-md px-4 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">Group Members</label>
+              {users.map((u, idx) => (
+                <div key={idx} className="flex items-center space-x-2 mb-1">
+                  <input
+                    type="text"
+                    value={u.name}
+                    onChange={e => handleUserChange(idx, 'name', e.target.value)}
+                    placeholder="Name"
+                    className="border border-gray-300 rounded-md px-2 py-1 flex-1"
+                    disabled={idx === 0 && !isCurrentUserEditable}
+                  />
+                  <input
+                    type="email"
+                    value={u.mail}
+                    onChange={e => handleUserChange(idx, 'mail', e.target.value)}
+                    placeholder="Email"
+                    className="border border-gray-300 rounded-md px-2 py-1 flex-1"
+                    disabled={idx === 0 && !isCurrentUserEditable}
+                  />
+                  {idx !== 0 && (
+                    <button type="button" onClick={() => removeUserField(idx)} className="text-red-500 hover:text-red-700">&times;</button>
+                  )}
+                </div>
+              ))}
+              <button type="button" onClick={addUserField} className="text-teal-600 hover:underline text-sm mt-1">+ Add another member</button>
+            </div>
             <div className="flex justify-end space-x-3">
               <button onClick={() => setShowModal(false)} className="text-sm text-gray-500 hover:underline">
                 Cancel
@@ -252,12 +362,6 @@ export default function Groups() {
           </div>
         </div>
       )}
-
-      {/* Troubleshooting Guide */}
-      <TroubleshootingGuide 
-        isVisible={showTroubleshooting} 
-        onClose={() => setShowTroubleshooting(false)} 
-      />
     </div>
   );
 }

@@ -238,6 +238,7 @@ public class GroupServiceImpl implements GroupService {
                 .filter(ex -> ex.getIsSettled() == Settled.NOT_SETTLED)
                 .map(ex -> {
                     ExpenseDTO dto = new ExpenseDTO();
+                    dto.setId(ex.getId().intValue());
                     dto.setAmount(ex.getAmount());
                     dto.setDescription(ex.getDescription());
                     dto.setUserName(ex.getPaidBy().getName());
@@ -248,6 +249,28 @@ public class GroupServiceImpl implements GroupService {
                     dto.setRecurring(ex.getRecurring());
                     dto.setInterval(ex.getInterval());
                     dto.setNextDueDate(ex.getNextDueDate() != null ? ex.getNextDueDate().toString() : null);
+                    
+                    // Set additional fields for frontend compatibility
+                    if (ex.getPaidBy() != null) {
+                        dto.setPaidByUserID(ex.getPaidBy().getId().intValue());
+                    }
+                    dto.setGroupID(savedGroup.getId().intValue());
+                    dto.setGroupName(savedGroup.getName());
+                    
+                    // Convert user splits
+                    if (ex.getAmountSplit() != null) {
+                        List<UserSplitReceivingDTO> userSplitDTOs = new ArrayList<>();
+                        for (UsersSplit split : ex.getAmountSplit()) {
+                            UserSplitReceivingDTO splitDTO = new UserSplitReceivingDTO();
+                            splitDTO.setUserId(split.getUser().getId().intValue());
+                            splitDTO.setAmount(split.getAmount());
+                            splitDTO.setPercentage(split.getPercentage());
+                            splitDTO.setShares(split.getShares());
+                            userSplitDTOs.add(splitDTO);
+                        }
+                        dto.setUserSplit(userSplitDTOs);
+                    }
+                    
                     return dto;
                 })
                 .collect(Collectors.toList());
@@ -282,28 +305,154 @@ public class GroupServiceImpl implements GroupService {
 
     @Override
     public List<ExpenseDTO> getExpensesByFilter(Integer groupId, String category, String startDate, String endDate) {
+        // Find the group first
         Optional<UsersGroup> groupOpt = groupRepository.findById(groupId);
-        if (groupOpt.isEmpty()) return new ArrayList<>();
-        List<Expense> expenses = groupOpt.get().getExpenses();
-        return expenses.stream()
-                .filter(ex -> (category == null || (ex.getCategory() != null && ex.getCategory().equalsIgnoreCase(category)))
-                        && (startDate == null || (ex.getTimestamp() != null && !ex.getTimestamp().before(java.sql.Timestamp.valueOf(startDate))))
-                        && (endDate == null || (ex.getTimestamp() != null && !ex.getTimestamp().after(java.sql.Timestamp.valueOf(endDate)))))
-                .map(ex -> {
-                    ExpenseDTO dto = new ExpenseDTO();
-                    dto.setAmount(ex.getAmount());
-                    dto.setDescription(ex.getDescription());
-                    dto.setUserName(ex.getPaidBy().getName());
-                    dto.setSplitType(ex.getSplitType());
-                    dto.setCategory(ex.getCategory());
-                    dto.setNotes(ex.getNotes());
-                    dto.setTimestamp(ex.getTimestamp() != null ? ex.getTimestamp().toString() : null);
-                    dto.setRecurring(ex.getRecurring());
-                    dto.setInterval(ex.getInterval());
-                    dto.setNextDueDate(ex.getNextDueDate() != null ? ex.getNextDueDate().toString() : null);
-                    return dto;
-                })
-                .collect(Collectors.toList());
+        if (groupOpt.isEmpty()) {
+            return new ArrayList<>();
+        }
+        
+        UsersGroup group = groupOpt.get();
+        List<Expense> groupExpenses = group.getExpenses();
+        
+        // Apply filters if provided
+        List<Expense> filteredExpenses = groupExpenses.stream()
+            .filter(expense -> {
+                // Category filter
+                if (category != null && !category.isEmpty()) {
+                    if (!category.equals(expense.getCategory())) {
+                        return false;
+                    }
+                }
+                
+                // Date range filter
+                if (startDate != null && !startDate.isEmpty()) {
+                    try {
+                        java.sql.Date start = java.sql.Date.valueOf(startDate);
+                        if (expense.getTimestamp().before(start)) {
+                            return false;
+                        }
+                    } catch (Exception e) {
+                        // If date parsing fails, skip this filter
+                    }
+                }
+                
+                if (endDate != null && !endDate.isEmpty()) {
+                    try {
+                        java.sql.Date end = java.sql.Date.valueOf(endDate);
+                        if (expense.getTimestamp().after(end)) {
+                            return false;
+                        }
+                    } catch (Exception e) {
+                        // If date parsing fails, skip this filter
+                    }
+                }
+                
+                return true;
+            })
+            .collect(Collectors.toList());
+        
+        // Convert to DTOs
+        List<ExpenseDTO> expenseDTOs = new ArrayList<>();
+        for (Expense expense : filteredExpenses) {
+            ExpenseDTO dto = new ExpenseDTO();
+            dto.setId(expense.getId().intValue());
+            dto.setAmount(expense.getAmount());
+            dto.setDescription(expense.getDescription());
+            dto.setCategory(expense.getCategory());
+            dto.setSplitType(expense.getSplitType());
+            dto.setNotes(expense.getNotes());
+            dto.setRecurring(expense.getRecurring());
+            dto.setInterval(expense.getInterval());
+            
+            // Set timestamp as string
+            if (expense.getTimestamp() != null) {
+                dto.setTimestamp(expense.getTimestamp().toString());
+            }
+            
+            // Set next due date as string
+            if (expense.getNextDueDate() != null) {
+                dto.setNextDueDate(expense.getNextDueDate().toString());
+            }
+            
+            // Set user name and ID
+            if (expense.getPaidBy() != null) {
+                dto.setUserName(expense.getPaidBy().getName());
+                dto.setPaidByUserID(expense.getPaidBy().getId().intValue());
+            }
+            
+            // Set group info
+            dto.setGroupID(groupId);
+            dto.setGroupName(group.getName());
+            
+            // Convert user splits
+            if (expense.getAmountSplit() != null) {
+                List<UserSplitReceivingDTO> userSplitDTOs = new ArrayList<>();
+                for (UsersSplit split : expense.getAmountSplit()) {
+                    UserSplitReceivingDTO splitDTO = new UserSplitReceivingDTO();
+                    splitDTO.setUserId(split.getUser().getId().intValue());
+                    splitDTO.setAmount(split.getAmount());
+                    splitDTO.setPercentage(split.getPercentage());
+                    splitDTO.setShares(split.getShares());
+                    userSplitDTOs.add(splitDTO);
+                }
+                dto.setUserSplit(userSplitDTOs);
+            }
+            
+            expenseDTOs.add(dto);
+        }
+        
+        return expenseDTOs;
+    }
+    
+    @Override
+    public List<GroupCreationResponseDTO> getAllGroups() {
+        List<UsersGroup> groups = groupRepository.findAll();
+        List<GroupCreationResponseDTO> responseDTOs = new ArrayList<>();
+        
+        for (UsersGroup group : groups) {
+            GroupCreationResponseDTO responseDTO = new GroupCreationResponseDTO();
+            responseDTO.setId(group.getId());
+            responseDTO.setName(group.getName());
+            responseDTO.setDescription(group.getDescription());
+            responseDTO.setCurrency(group.getDefaultCurrency());
+            
+            // Calculate total spending
+            double totalSpending = group.getExpenses().stream()
+                    .mapToDouble(Expense::getAmount)
+                    .sum();
+            responseDTO.setTotalSpending(totalSpending);
+            
+            // Convert users to UserResponseDTO
+            List<UserResponseDTO> userResponseDTOList = new ArrayList<>();
+            for (Users user : group.getUsers()) {
+                UserResponseDTO userResponseDTO = new UserResponseDTO(user.getId(), user.getName(), user.getMail());
+                userResponseDTOList.add(userResponseDTO);
+            }
+            responseDTO.setUsersList(userResponseDTOList);
+            
+            responseDTOs.add(responseDTO);
+        }
+        
+        return responseDTOs;
+    }
+    
+    @Override
+    public void deleteGroup(int groupId) throws GroupNotFoundException {
+        Optional<UsersGroup> group = groupRepository.findById(groupId);
+        if (group.isEmpty()) {
+            throw new GroupNotFoundException("Group not found with id: " + groupId);
+        }
+        
+        // Delete all expenses associated with this group
+        List<Expense> groupExpenses = group.get().getExpenses();
+        for (Expense expense : groupExpenses) {
+            // Delete all user splits for this expense
+            usersSplitRepo.deleteAll(expense.getAmountSplit());
+        }
+        expenseRepo.deleteAll(groupExpenses);
+        
+        // Delete the group
+        groupRepository.delete(group.get());
     }
 
     @Scheduled(cron = "0 * * * * *") // Runs daily at midnight

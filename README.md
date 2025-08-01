@@ -1,242 +1,258 @@
-# Splitwise Clone
+# SplitWise Clone - Frontend
 
-A full-stack expense splitting application built with React (frontend) and Spring Boot (backend).
+A comprehensive expense splitting application built with React and Spring Boot, featuring modern UI design and full CRUD operations for expense management.
 
 ## 🚀 Features
 
-- **User Authentication**: JWT-based login and registration
-- **Expense Management**: Create and track expenses in groups
-- **Budget Tracking**: Set monthly budgets and track spending
-- **Group Management**: Create and manage expense groups
-- **Activity Feed**: View recent transactions and updates
-- **Responsive Design**: Modern UI that works on all devices
+### Authentication & User Management
+- **User Registration & Login**: Secure JWT-based authentication
+- **Profile Management**: Update user information and view statistics
+- **User Statistics**: Track total spending, group memberships, and expense history
 
-## 🛠️ Tech Stack
-
-### Frontend
-- **React 18** with Vite
-- **React Router DOM** for navigation
-- **Axios** for API communication
-- **Tailwind CSS** for styling
-- **Lucide React** for icons
-- **Context API** for state management
-
-### Backend
-- **Spring Boot 3** with Java 17
-- **Spring Security** with JWT authentication
-- **Spring Data JPA** for database operations
-- **PostgreSQL** database
-- **Maven** for dependency management
-
-## 📋 Prerequisites
-
-- **Node.js** (v16 or higher)
-- **Java 17** or higher
-- **PostgreSQL** database
-- **Maven** (included with the project)
-
-## 🚀 Quick Start
-
-### 1. Clone the Repository
-```bash
-git clone <repository-url>
-cd splitwise
-```
-
-### 2. Database Setup
-1. Create a PostgreSQL database named `splitwise_db`
-2. Update database credentials in `backend/src/main/resources/application.properties` if needed:
-   ```properties
-   spring.datasource.username=postgres
-   spring.datasource.password=postgres
-   ```
-
-### 3. Start the Backend
-```bash
-cd backend
-./mvnw spring-boot:run
-```
-The backend will start on `http://localhost:8080`
-
-### 4. Start the Frontend
-```bash
-cd ../
-npm install
-npm run dev
-```
-The frontend will start on `http://localhost:5173`
-
-## 📱 Available Routes
-
-### Public Routes
-- `/login` - Login and registration page
-
-### Protected Routes (require authentication)
-- `/` - Dashboard with budget summary and recent activity
-- `/groups` - Manage expense groups
-- `/expenses` - View expense activity
-- `/budget` - Manage monthly budgets
-- `/profile` - User profile settings
-
-## 🔐 Authentication Flow
-
-1. **Registration**: Users can create an account with name, email, and password
-2. **Login**: Users authenticate with email and password
-3. **JWT Token**: Upon successful login, a JWT token is issued
-4. **Protected Routes**: All routes except `/login` require authentication
-5. **Token Storage**: JWT token is stored in localStorage
-6. **Auto-logout**: Token expiration triggers automatic logout
-
-## 🗄️ API Endpoints
-
-### Authentication
-- `POST /api/auth/register` - Register new user
-- `POST /api/auth/login` - User login
-- `GET /api/auth/debug/user/{email}` - Debug user lookup
-
-### Users
-- `GET /api/users` - Get all users
-- `GET /api/users/{id}` - Get user by ID
-
-### Budgets
-- `POST /api/budget` - Create or update budget
-- `GET /api/budget/{id}` - Get budget by ID
-- `GET /api/budget/user/{userId}` - Get user budgets
-- `GET /api/budget/summary/{userId}` - Get budget summary
-- `GET /api/budget/exceeded/{userId}` - Get exceeded budgets
-- `GET /api/budget/nearing-limit/{userId}` - Get budgets nearing limit
-- `DELETE /api/budget/{id}` - Delete budget
-
-### Groups
-- `POST /createGroup` - Create new group
-- `POST /addExpense` - Add expense to group
-- `GET /settleUp/{groupId}/{userId}` - Settle up for group
-- `GET /expenses` - Get expenses with filters
-
-## 🎯 Key Features Explained
-
-### Dashboard
-- **Budget Summary**: Shows total budget, spent amount, and remaining budget
-- **Recent Activity**: Displays latest expenses and transactions
-- **Search**: Filter activities by description, user, or date
-
-### Groups
+### Group Management
 - **Create Groups**: Add new expense groups with members
-- **View Groups**: See all groups you're a member of
-- **Group Details**: View expenses and balances within groups
+- **Group Details**: Comprehensive group view with tabs for:
+  - Overview with recent activity and member balances
+  - Members management
+  - Expense management
+  - Settle up functionality
+- **Group Statistics**: Track total spending, member count, and currency
+
+### Expense Management
+- **Add Expenses**: Create new expenses with detailed information:
+  - Description, amount, category
+  - Split types (Equal, Percentage, Exact, Shares)
+  - Recurring expenses with intervals
+  - Notes and timestamps
+- **Edit & Delete**: Full CRUD operations for expenses
+- **Expense Categories**: Predefined categories with icons
+- **Expense Filtering**: Filter by group, category, date range
 
 ### Budget Management
 - **Create Budgets**: Set monthly spending limits by category
-- **Track Spending**: Monitor budget usage and remaining amounts
-- **Alerts**: Get notified when approaching or exceeding limits
+- **Budget Tracking**: Monitor spending against limits
+- **Budget Alerts**: Visual indicators for exceeded and nearing limits
+- **Budget Statistics**: Summary views and detailed breakdowns
 
-### Activity Feed
-- **Recent Transactions**: View latest expenses and settlements
-- **Filtering**: Filter by category, date range, or group
-- **Real-time Updates**: See new activities as they happen
+### Settle Up Functionality
+- **Calculate Settlements**: Automatic calculation of who owes what
+- **Settlement Tracking**: Mark transactions as settled
+- **Balance Overview**: Clear view of member balances
 
-## 🔧 Development
+### Dashboard & Analytics
+- **Comprehensive Dashboard**: Overview of all financial activities
+- **Real-time Statistics**: Live updates of spending and balances
+- **Activity Feed**: Recent transactions with filtering
+- **Budget Alerts**: Notifications for exceeded budgets
 
-### Frontend Development
-```bash
-# Install dependencies
-npm install
-
-# Start development server
-npm run dev
-
-# Build for production
-npm run build
-
-# Preview production build
-npm run preview
-```
-
-### Backend Development
-```bash
-# Compile and run
-./mvnw spring-boot:run
-
-# Run tests
-./mvnw test
-
-# Clean and compile
-./mvnw clean compile
-```
-
-### Database Management
-The application uses Hibernate with `ddl-auto=update`, so the database schema will be automatically created/updated when you start the application.
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-1. **Backend won't start**
-   - Check if PostgreSQL is running
-   - Verify database credentials in `application.properties`
-   - Ensure Java 17+ is installed
-
-2. **Frontend can't connect to backend**
-   - Verify backend is running on port 8080
-   - Check CORS configuration in `SecurityConfig.java`
-   - Ensure API base URL is correct in `api.js`
-
-3. **Authentication issues**
-   - Check browser console for JWT errors
-   - Verify token is being sent in Authorization header
-   - Check backend logs for authentication errors
-
-4. **Database connection issues**
-   - Ensure PostgreSQL is running
-   - Check database name, username, and password
-   - Verify database exists
-
-### Debug Mode
-Enable debug logging by adding to `application.properties`:
-```properties
-logging.level.practice.project.splitwise=DEBUG
-```
-
-## 📝 Environment Variables
+## 🛠️ Technology Stack
 
 ### Frontend
+- **React 18**: Modern React with hooks
+- **Vite**: Fast build tool and development server
+- **Tailwind CSS**: Utility-first CSS framework
+- **Lucide React**: Beautiful icons
+- **React Router**: Client-side routing
+- **Axios**: HTTP client for API calls
+
+### Backend Integration
+- **Spring Boot**: RESTful API backend
+- **JWT Authentication**: Secure token-based auth
+- **MySQL**: Database storage
+- **Maven**: Build tool
+
+## 📁 Project Structure
+
+```
+splitwise/
+├── src/
+│   ├── components/
+│   │   ├── Activity.jsx          # Enhanced activity feed with filtering
+│   │   ├── Dashboard.jsx         # Comprehensive dashboard
+│   │   ├── ExpenseManager.jsx    # Full expense CRUD operations
+│   │   ├── GroupDetails.jsx      # Detailed group management
+│   │   ├── Groups.jsx            # Group listing and creation
+│   │   ├── Sidebar.jsx           # Navigation sidebar
+│   │   └── BackendStatus.jsx     # Backend connection status
+│   ├── pages/
+│   │   ├── HomePage.jsx          # Main dashboard page
+│   │   ├── LoginPage.jsx         # Authentication
+│   │   ├── Budget.jsx            # Budget management
+│   │   └── Profile.jsx           # User profile and statistics
+│   ├── services/
+│   │   ├── api.js                # Base API configuration
+│   │   ├── authService.js        # Authentication services
+│   │   ├── budgetService.js      # Budget API calls
+│   │   ├── expenseService.js     # Expense API calls
+│   │   ├── groupService.js       # Group API calls
+│   │   └── userService.js        # User API calls
+│   ├── contexts/
+│   │   └── AuthContext.jsx       # Authentication context
+│   └── utils/
+│       ├── constants.js          # Application constants
+│       └── helpers.js            # Utility functions
+```
+
+## 🚀 Getting Started
+
+### Prerequisites
+- Node.js (v16 or higher)
+- npm or yarn
+- Backend server running on `http://localhost:8080`
+
+### Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd splitwise
+   ```
+
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
+
+3. **Start the development server**
+   ```bash
+   npm run dev
+   ```
+
+4. **Open your browser**
+   Navigate to `http://localhost:5173`
+
+## 🔧 Configuration
+
+### Backend URL
+The frontend is configured to connect to the backend at `http://localhost:8080`. You can modify this in:
+- `src/services/api.js` - Base API configuration
+
+### Environment Variables
 Create a `.env` file in the root directory:
 ```env
 VITE_API_BASE_URL=http://localhost:8080
 ```
 
-### Backend
-Update `application.properties`:
-```properties
-# Database
-spring.datasource.url=jdbc:postgresql://localhost:5432/splitwise_db
-spring.datasource.username=your_username
-spring.datasource.password=your_password
+## 📱 Features in Detail
 
-# JWT
-jwt.secret=your_jwt_secret_key
-jwt.expiration=36000000
+### 1. Authentication Flow
+- **Login**: Email/password authentication with JWT tokens
+- **Registration**: New user signup with validation
+- **Token Management**: Automatic token refresh and storage
+- **Protected Routes**: Route protection based on authentication status
 
-# Server
-server.port=8080
+### 2. Dashboard Overview
+- **Welcome Message**: Personalized greeting with user name
+- **Budget Alerts**: Visual notifications for budget issues
+- **Statistics Cards**: 
+  - Total budget and spending
+  - Group count and activity
+  - Recent transactions
+- **Quick Actions**: Easy access to common functions
+
+### 3. Group Management
+- **Group Creation**: Create new groups with members
+- **Group Details**: Comprehensive view with tabs:
+  - **Overview**: Recent activity and member balances
+  - **Members**: Member list with balances
+  - **Expenses**: Full expense management
+  - **Settle Up**: Settlement calculations and tracking
+
+### 4. Expense Management
+- **Add Expenses**: Comprehensive expense form with:
+  - Basic details (description, amount, date)
+  - Category selection with icons
+  - Split type configuration
+  - Recurring expense options
+  - Notes and additional details
+- **Edit/Delete**: Full CRUD operations
+- **Filtering**: Filter by group, category, date range
+- **Search**: Real-time search functionality
+
+### 5. Budget Management
+- **Create Budgets**: Set monthly limits by category
+- **Visual Indicators**: Progress bars and color coding
+- **Alerts**: Notifications for exceeded/nearing limits
+- **Statistics**: Detailed budget breakdowns
+
+### 6. Activity Tracking
+- **Comprehensive Feed**: All transactions with details
+- **Advanced Filtering**: Multiple filter options
+- **Search**: Real-time search across all fields
+- **Statistics**: Total spending and averages
+
+### 7. User Profile
+- **Personal Information**: Edit user details
+- **Statistics**: User spending and group statistics
+- **Recent Activity**: Personal transaction history
+- **Group Memberships**: Overview of user's groups
+
+## 🎨 UI/UX Features
+
+### Design System
+- **Modern Design**: Clean, professional interface
+- **Responsive Layout**: Works on all device sizes
+- **Color Coding**: Intuitive color system for different states
+- **Icons**: Consistent iconography throughout
+- **Animations**: Smooth transitions and hover effects
+
+### User Experience
+- **Intuitive Navigation**: Clear navigation structure
+- **Loading States**: Proper loading indicators
+- **Error Handling**: User-friendly error messages
+- **Empty States**: Helpful messages when no data exists
+- **Confirmation Dialogs**: Safe deletion and important actions
+
+## 🔒 Security Features
+
+- **JWT Authentication**: Secure token-based authentication
+- **Protected Routes**: Route-level security
+- **API Security**: Automatic token inclusion in requests
+- **Input Validation**: Client-side validation
+- **Error Handling**: Secure error handling
+
+## 📊 Data Management
+
+### State Management
+- **React Context**: Global state for authentication
+- **Local State**: Component-level state management
+- **API Integration**: Real-time data synchronization
+
+### Data Flow
+1. **API Calls**: Centralized service layer
+2. **State Updates**: Reactive UI updates
+3. **Error Handling**: Comprehensive error management
+4. **Loading States**: User feedback during operations
+
+## 🚀 Deployment
+
+### Build for Production
+```bash
+npm run build
 ```
+
+### Deploy
+The built files will be in the `dist/` directory, ready for deployment to any static hosting service.
 
 ## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Add tests if applicable
+4. Test thoroughly
 5. Submit a pull request
 
-## 📄 License
+## 📝 License
 
 This project is licensed under the MIT License.
 
 ## 🆘 Support
 
-If you encounter any issues or have questions:
-1. Check the troubleshooting section
-2. Review the console logs
-3. Check the backend application logs
-4. Create an issue with detailed error information
+For support and questions:
+- Check the documentation
+- Review the code comments
+- Open an issue on GitHub
+
+---
+
+**Note**: This frontend application is designed to work with the SplitWise backend API. Ensure the backend server is running and properly configured before using the frontend features.
