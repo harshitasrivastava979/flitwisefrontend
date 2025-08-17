@@ -39,7 +39,7 @@ public class UserController {
             Users u = user.get();
             return ResponseEntity.ok(new UserResponseDTO(u.getId(), u.getName(), u.getMail()));
         }
-        return ResponseEntity.notFound().build();
+        return ResponseEntity.status(404).build();
     }
 
     @PostMapping

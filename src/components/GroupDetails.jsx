@@ -14,14 +14,18 @@ import {
   Eye,
   Edit,
   Trash2,
-  Receipt
+  Receipt,
+  ArrowRight
 } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getGroups, settleUp, markGroupSettled } from '../services/groupService';
+import { getGroups, settleUp, markGroupSettled, markExpensesAsSettled } from '../services/groupService';
 import { getAllUsers } from '../services/userService';
 import { getExpenses } from '../services/expenseService';
 import { useAuth } from '../contexts/AuthContext';
 import AddExpenseModal from './AddExpenseModal';
+import ExpenseManagerWithTabs from './ExpenseManagerWithTabs';
+import RecurringExpenses from './RecurringExpenses';
+import RecurringExpenseCalendar from './RecurringExpenseCalendar';
 
 export default function GroupDetails() {
   const { groupName } = useParams();
@@ -45,6 +49,18 @@ export default function GroupDetails() {
   useEffect(() => {
     console.log('Expenses state updated:', expenses);
     console.log('Number of expenses in state:', expenses.length);
+    
+    // Debug each expense structure
+    expenses.forEach((expense, index) => {
+      console.log(`Expense ${index + 1}:`, {
+        id: expense.id,
+        description: expense.description,
+        amount: expense.amount,
+        paidByUserID: expense.paidByUserID,
+        splitType: expense.splitType,
+        userSplit: expense.userSplit
+      });
+    });
   }, [expenses]);
 
   const fetchGroupData = async () => {
@@ -63,12 +79,18 @@ export default function GroupDetails() {
         // Fetch expenses for this specific group
         await fetchGroupExpenses(foundGroup.id);
       } else {
-        setError('Group not found');
+        setError('Group not found or you do not have access to this group');
       }
       
       setUsers(usersRes.data || []);
     } catch (err) {
-      setError('Failed to fetch group data');
+      if (err.response?.status === 401) {
+        setError('Please log in to view group details');
+      } else if (err.response?.status === 403) {
+        setError('You do not have permission to access this group');
+      } else {
+        setError('Failed to fetch group data: ' + (err.response?.data?.message || err.message));
+      }
       console.error('Error fetching group data:', err);
     } finally {
       setLoading(false);
@@ -86,8 +108,143 @@ export default function GroupDetails() {
     } catch (err) {
       console.error('Error fetching group expenses:', err);
       console.error('Error details:', err.response?.data);
-      setExpenses([]);
+      if (err.response?.status === 403) {
+        setError('You do not have permission to view expenses for this group');
+      } else {
+        setExpenses([]);
+      }
     }
+  };
+
+  // Helper functions
+  const formatCurrency = (amount) => `₹${Math.abs(amount).toFixed(2)}`;
+
+  const getBalanceStatus = (balance) => {
+    if (Math.abs(balance) < 0.01) return 'settled';
+    return balance > 0 ? 'gets_back' : 'owes';
+  };
+
+  // Settlement Display Component
+  const SettlementDisplay = ({ settlementData, onMarkSettled }) => {
+    if (!settlementData) return null;
+
+    return (
+      <div className="space-y-6">
+        {/* Summary Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-center space-x-3">
+              <DollarSign className="w-8 h-8 text-blue-600" />
+              <div>
+                <p className="text-sm font-medium text-blue-600">Total Settlements</p>
+                <p className="text-xl font-bold text-blue-900">{settlementData.length}</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+            <div className="flex items-center space-x-3">
+              <Users className="w-8 h-8 text-green-600" />
+              <div>
+                <p className="text-sm font-medium text-green-600">Group Members</p>
+                <p className="text-xl font-bold text-green-900">{group.usersList?.length || 0}</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+            <div className="flex items-center space-x-3">
+              <CheckCircle className="w-8 h-8 text-orange-600" />
+              <div>
+                <p className="text-sm font-medium text-orange-600">Total Amount</p>
+                <p className="text-xl font-bold text-orange-900">
+                  ₹{settlementData.reduce((sum, t) => sum + t.amount, 0).toFixed(2)}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Settlement Transactions */}
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Settlement Plan</h3>
+          
+          {settlementData.length === 0 ? (
+            <div className="text-center py-8">
+              <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
+              <h4 className="text-lg font-medium text-gray-900 mb-2">All Settled!</h4>
+              <p className="text-gray-600">Everyone is even. No settlements needed.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                <div className="flex items-center space-x-3">
+                  <CheckCircle className="w-5 h-5 text-green-600" />
+                  <div>
+                    <h4 className="text-sm font-medium text-green-800">Optimal Settlement Plan</h4>
+                    <p className="text-sm text-green-700">
+                      Complete these {settlementData.length} transaction(s) to settle all expenses efficiently.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {settlementData.map((transaction, index) => (
+                <div key={index} className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-4">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-10 h-10 bg-gradient-to-br from-red-400 to-red-600 rounded-full flex items-center justify-center">
+                          <span className="text-white font-semibold text-sm">
+                            {transaction.fromUserName.charAt(0).toUpperCase()}
+                          </span>
+                        </div>
+                        <ArrowRight className="w-5 h-5 text-gray-400" />
+                        <div className="w-10 h-10 bg-gradient-to-br from-green-400 to-green-600 rounded-full flex items-center justify-center">
+                          <span className="text-white font-semibold text-sm">
+                            {transaction.toUserName.charAt(0).toUpperCase()}
+                          </span>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">
+                          <span className="text-red-600">{transaction.fromUserName}</span> pays{' '}
+                          <span className="text-green-600">{transaction.toUserName}</span>
+                        </p>
+                        <p className="text-sm text-gray-600">{transaction.description}</p>
+                        {transaction.status && (
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                            transaction.status === 'SETTLED' 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {transaction.status}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xl font-bold text-gray-900">₹{transaction.amount.toFixed(2)}</p>
+                      <p className="text-xs text-gray-500">Amount to settle</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              <div className="mt-6 pt-4 border-t border-gray-200">
+                <button 
+                  onClick={onMarkSettled}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg font-medium flex items-center justify-center space-x-2 transition-colors"
+                >
+                  <CheckCircle className="w-5 h-5" />
+                  <span>Mark All Expenses as Settled</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
   };
 
   const handleSettleUp = async () => {
@@ -98,22 +255,21 @@ export default function GroupDetails() {
       setSettleUpData(response.data);
       setShowSettleUp(true);
     } catch (err) {
-      setError('Failed to calculate settle up');
-      console.error('Error settling up:', err);
+      setError('Failed to calculate settlements: ' + err.message);
+      console.error('Error in settlement calculation:', err);
     }
   };
 
-  const handleMarkSettled = async (transactionId) => {
+  const handleMarkSettled = async () => {
     try {
-      await markGroupSettled({
-        groupId: group.id,
-        transactionId: transactionId,
-        settledBy: user.id
-      });
-      // Refresh settle up data
-      handleSettleUp();
+      await markExpensesAsSettled(group.id, user.id);
+      setError(null);
+      // Refresh group data and settle up data
+      fetchGroupData();
+      setSettleUpData(null);
+      setShowSettleUp(false);
     } catch (err) {
-      setError('Failed to mark as settled');
+      setError('Failed to mark expenses as settled');
       console.error('Error marking settled:', err);
     }
   };
@@ -141,16 +297,21 @@ export default function GroupDetails() {
     return expenses.reduce((total, expense) => total + (expense.amount || 0), 0);
   };
 
+  // Calculate user balance from settlement data (if available) or show 0
   const calculateUserBalance = (userId) => {
+    if (!settleUpData || !Array.isArray(settleUpData)) {
+      return 0; // No settlement data available
+    }
+    
     let balance = 0;
-    expenses.forEach(expense => {
-      if (expense.paidByUserID === userId) {
-        balance += expense.amount || 0;
+    
+    // Calculate balance from settlement transactions
+    settleUpData.forEach(transaction => {
+      if (transaction.fromUserId === userId) {
+        balance -= transaction.amount; // User owes money
       }
-      // Subtract user's share
-      const userSplit = expense.userSplit?.find(split => split.userId === userId);
-      if (userSplit) {
-        balance -= userSplit.amount || (expense.amount / expense.userSplit.length);
+      if (transaction.toUserId === userId) {
+        balance += transaction.amount; // User gets money back
       }
     });
     
@@ -229,12 +390,21 @@ export default function GroupDetails() {
             <CheckCircle className="w-4 h-4" />
             <span>Settle Up</span>
           </button>
-          <button className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg font-medium flex items-center space-x-2">
-            <Settings className="w-4 h-4" />
-            <span>Settings</span>
-          </button>
         </div>
       </div>
+
+      {/* Group Settlement Status */}
+      {group.isSettled === 'SETTLED' && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="flex items-center space-x-3">
+            <CheckCircle className="w-5 h-5 text-green-600" />
+            <div>
+              <h3 className="text-sm font-medium text-green-800">Group Settled</h3>
+              <p className="text-sm text-green-700">All expenses have been settled. All member balances are zero.</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -295,6 +465,8 @@ export default function GroupDetails() {
               { id: 'overview', label: 'Overview', icon: PieChart },
               { id: 'members', label: 'Members', icon: Users },
               { id: 'expenses', label: 'Expenses', icon: DollarSign },
+              { id: 'recurring', label: 'Recurring', icon: Receipt },
+              { id: 'calendar', label: 'Calendar', icon: Calendar },
               { id: 'settleup', label: 'Settle Up', icon: CheckCircle }
             ].map((tab) => {
               const Icon = tab.icon;
@@ -330,12 +502,58 @@ export default function GroupDetails() {
                     {expenses.slice(0, 5).map((expense, index) => (
                       <div key={expense.id || index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
                         <div className="flex-1">
-                          <p className="font-medium text-gray-900">{expense.description}</p>
+                          <div className="flex items-center space-x-2">
+                            <p className="font-medium text-gray-900">{expense.description}</p>
+                            {expense.isSettled === 'SETTLED' && (
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                <CheckCircle className="w-3 h-3 mr-1" />
+                                Settled
+                              </span>
+                            )}
+                          </div>
                           <p className="text-sm text-gray-600">Paid by {getUserName(expense.paidByUserID)}</p>
+                          
+                          {/* Show participating members */}
+                          {expense.userSplit && expense.userSplit.length > 0 && (
+                            <div className="mt-2 flex items-center space-x-2">
+                              <Users className="w-3 h-3 text-gray-400" />
+                              <div className="flex items-center space-x-1">
+                                <span className="text-xs text-gray-500">Split with:</span>
+                                <div className="flex items-center space-x-1">
+                                  {/* Deduplicate users by userId before displaying */}
+                                  {(() => {
+                                    const uniqueUsers = expense.userSplit
+                                      .filter((split, index, self) => 
+                                        index === self.findIndex(s => s.userId === split.userId)
+                                      )
+                                      .slice(0, 3);
+                                    
+                                    return uniqueUsers.map((split, splitIndex) => (
+                                      <span key={`${split.userId}-${splitIndex}`} className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
+                                        {getUserName(split.userId)}
+                                      </span>
+                                    ));
+                                  })()}
+                                  {(() => {
+                                    const uniqueUsers = expense.userSplit
+                                      .filter((split, index, self) => 
+                                        index === self.findIndex(s => s.userId === split.userId)
+                                      );
+                                    return uniqueUsers.length > 3 && (
+                                      <span className="text-xs text-gray-500">
+                                        +{uniqueUsers.length - 3} more
+                                      </span>
+                                    );
+                                  })()}
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                         <div className="text-right">
                           <p className="font-semibold text-gray-900">₹{expense.amount?.toFixed(2)}</p>
                           <p className="text-xs text-gray-500">{formatDate(expense.timestamp)}</p>
+                          <p className="text-xs text-gray-400">{expense.splitType}</p>
                         </div>
                       </div>
                     ))}
@@ -354,32 +572,40 @@ export default function GroupDetails() {
                     Member Balances
                   </h3>
                   <div className="space-y-3">
-                    {group.usersList?.map((member) => {
-                      const balance = calculateUserBalance(member.id);
-                      return (
-                        <div key={member.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-8 h-8 bg-gradient-to-br from-teal-400 to-teal-600 rounded-full flex items-center justify-center">
-                              <span className="text-white font-semibold text-sm">
-                                {getUserName(member.id).charAt(0).toUpperCase()}
-                              </span>
+                    {!settleUpData ? (
+                      <div className="text-center py-4">
+                        <p className="text-gray-500 text-sm">Click "Settle Up" to see member balances</p>
+                      </div>
+                    ) : (
+                      group.usersList?.map((member) => {
+                        const balance = calculateUserBalance(member.id);
+                        const isGroupSettled = group.isSettled === 'SETTLED';
+                        
+                        return (
+                          <div key={member.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <div className="flex items-center space-x-3">
+                              <div className="w-8 h-8 bg-gradient-to-br from-teal-400 to-teal-600 rounded-full flex items-center justify-center">
+                                <span className="text-white font-semibold text-sm">
+                                  {getUserName(member.id).charAt(0).toUpperCase()}
+                                </span>
+                              </div>
+                              <div>
+                                <p className="font-medium text-gray-900">{getUserName(member.id)}</p>
+                                <p className="text-sm text-gray-600">{getUserEmail(member.id)}</p>
+                              </div>
                             </div>
-                            <div>
-                              <p className="font-medium text-gray-900">{getUserName(member.id)}</p>
-                              <p className="text-sm text-gray-600">{getUserEmail(member.id)}</p>
+                            <div className={`text-right ${isGroupSettled ? 'text-green-600' : balance > 0 ? 'text-green-600' : balance < 0 ? 'text-red-600' : 'text-gray-600'}`}>
+                              <p className="font-semibold">
+                                {isGroupSettled ? '₹0.00' : `${balance > 0 ? '+' : ''}₹${balance.toFixed(2)}`}
+                              </p>
+                              <p className="text-xs">
+                                {isGroupSettled ? 'Settled' : balance > 0 ? 'Gets back' : balance < 0 ? 'Owes' : 'Settled'}
+                              </p>
                             </div>
                           </div>
-                          <div className={`text-right ${balance > 0 ? 'text-green-600' : balance < 0 ? 'text-red-600' : 'text-gray-600'}`}>
-                            <p className="font-semibold">
-                              {balance > 0 ? '+' : ''}₹{balance.toFixed(2)}
-                            </p>
-                            <p className="text-xs">
-                              {balance > 0 ? 'Gets back' : balance < 0 ? 'Owes' : 'Settled'}
-                            </p>
-                          </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })
+                    )}
                   </div>
                 </div>
               </div>
@@ -442,32 +668,38 @@ export default function GroupDetails() {
                     <div className="mt-3 pt-3 border-t border-gray-200">
                       <div className="flex items-center justify-between">
                         <p className="text-sm text-gray-600">Balance:</p>
-                        <span className={`font-semibold text-sm ${
-                          calculateUserBalance(member.id) > 0 
-                            ? 'text-green-600' 
-                            : calculateUserBalance(member.id) < 0 
-                              ? 'text-red-600' 
-                              : 'text-gray-600'
-                        }`}>
-                          ₹{calculateUserBalance(member.id).toFixed(2)}
-                        </span>
+                        {!settleUpData ? (
+                          <span className="text-gray-400 text-sm">Calculate settlements</span>
+                        ) : (
+                          <span className={`font-semibold text-sm ${
+                            calculateUserBalance(member.id) > 0 
+                              ? 'text-green-600' 
+                              : calculateUserBalance(member.id) < 0 
+                                ? 'text-red-600' 
+                                : 'text-gray-600'
+                          }`}>
+                            ₹{calculateUserBalance(member.id).toFixed(2)}
+                          </span>
+                        )}
                       </div>
-                      <div className="mt-1">
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div 
-                            className={`h-2 rounded-full ${
-                              calculateUserBalance(member.id) > 0 
-                                ? 'bg-green-500' 
-                                : calculateUserBalance(member.id) < 0 
-                                  ? 'bg-red-500' 
-                                  : 'bg-gray-400'
-                            }`}
-                            style={{ 
-                              width: `${Math.min(Math.abs(calculateUserBalance(member.id)) / 100 * 100, 100)}%` 
-                            }}
-                          ></div>
+                      {settleUpData && (
+                        <div className="mt-1">
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div 
+                              className={`h-2 rounded-full ${
+                                calculateUserBalance(member.id) > 0 
+                                  ? 'bg-green-500' 
+                                  : calculateUserBalance(member.id) < 0 
+                                    ? 'bg-red-500' 
+                                    : 'bg-gray-400'
+                              }`}
+                              style={{ 
+                                width: `${Math.min(Math.abs(calculateUserBalance(member.id)) / 100 * 100, 100)}%` 
+                              }}
+                            ></div>
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -477,76 +709,20 @@ export default function GroupDetails() {
 
           {/* Expenses Tab */}
           {activeTab === 'expenses' && (
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <h3 className="text-lg font-semibold text-gray-900">Group Expenses</h3>
-                <button
-                  onClick={handleAddExpense}
-                  className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg font-medium flex items-center space-x-2"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Add Expense</span>
-                </button>
-              </div>
-              
-              {expenses.length > 0 ? (
-                <div className="space-y-4">
-                  {expenses.map((expense) => (
-                    <div key={expense.id} className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-3 mb-2">
-                            <h4 className="font-semibold text-gray-900">{expense.description}</h4>
-                            {expense.category && (
-                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-teal-100 text-teal-800">
-                                {expense.category}
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center space-x-4 text-sm text-gray-600">
-                            <span className="flex items-center">
-                              <DollarSign className="w-4 h-4 mr-1" />
-                              ₹{expense.amount?.toFixed(2)}
-                            </span>
-                            <span className="flex items-center">
-                              <Users className="w-4 h-4 mr-1" />
-                              Paid by {getUserName(expense.paidByUserID)}
-                            </span>
-                            <span className="flex items-center">
-                              <Calendar className="w-4 h-4 mr-1" />
-                              {formatDate(expense.timestamp)}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex space-x-2">
-                          <button className="p-1 text-gray-400 hover:text-blue-600 transition-colors" title="View Details">
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          <button className="p-1 text-gray-400 hover:text-green-600 transition-colors" title="Edit">
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          <button className="p-1 text-gray-400 hover:text-red-600 transition-colors" title="Delete">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <DollarSign className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">No expenses yet</h3>
-                  <p className="text-gray-600 mb-4">Add your first expense to start tracking</p>
-                  <button
-                    onClick={handleAddExpense}
-                    className="bg-teal-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-teal-700"
-                  >
-                    Add Expense
-                  </button>
-                </div>
-              )}
-            </div>
+            <ExpenseManagerWithTabs 
+              groupId={group.id} 
+              onExpenseAdded={handleExpenseAdded}
+            />
+          )}
+
+          {/* Recurring Expenses Tab */}
+          {activeTab === 'recurring' && (
+            <RecurringExpenses groupId={group.id} />
+          )}
+
+          {/* Calendar Tab */}
+          {activeTab === 'calendar' && (
+            <RecurringExpenseCalendar groupId={group.id} />
           )}
 
           {/* Settle Up Tab */}
@@ -563,64 +739,18 @@ export default function GroupDetails() {
                 </button>
               </div>
 
-              {settleUpData && settleUpData.length > 0 ? (
-                <div className="space-y-4">
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                    <div className="flex items-center space-x-3">
-                      <CheckCircle className="w-5 h-5 text-green-600" />
-                      <div>
-                        <h3 className="text-sm font-medium text-green-800">Settlement Plan</h3>
-                        <p className="text-sm text-green-700">Here's how to settle up the group expenses efficiently.</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    {settleUpData.map((transaction, index) => (
-                      <div key={index} className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-10 h-10 bg-gradient-to-br from-green-400 to-green-600 rounded-full flex items-center justify-center">
-                              <span className="text-white font-semibold text-sm">
-                                {getUserName(transaction.fromUser).charAt(0).toUpperCase()}
-                              </span>
-                            </div>
-                            <div>
-                              <p className="font-medium text-gray-900">
-                                {getUserName(transaction.fromUser)} → {getUserName(transaction.toUser)}
-                              </p>
-                              <p className="text-sm text-gray-600">Settlement transaction</p>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-lg font-bold text-gray-900">₹{transaction.amount}</p>
-                            <button
-                              onClick={() => handleMarkSettled(transaction.id)}
-                              className="text-sm text-green-600 hover:text-green-800 font-medium"
-                            >
-                              Mark as Settled
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : settleUpData && settleUpData.length === 0 ? (
-                <div className="text-center py-12">
-                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <CheckCircle className="w-8 h-8 text-green-600" />
-                  </div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">All Settled!</h3>
-                  <p className="text-gray-600">Everyone in the group is settled up.</p>
-                </div>
+              {settleUpData ? (
+                <SettlementDisplay 
+                  settlementData={settleUpData} 
+                  onMarkSettled={handleMarkSettled}
+                />
               ) : (
                 <div className="text-center py-12">
                   <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                     <DollarSign className="w-8 h-8 text-gray-400" />
                   </div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">No settlements needed</h3>
-                  <p className="text-gray-600 mb-4">Click "Calculate Settlements" to see if any settlements are needed.</p>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No settlements calculated</h3>
+                  <p className="text-gray-600 mb-4">Click "Calculate Settlements" to see detailed balance breakdown and settlement plan.</p>
                   <button
                     onClick={handleSettleUp}
                     className="bg-teal-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-teal-700"

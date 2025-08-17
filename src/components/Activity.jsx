@@ -14,12 +14,14 @@ import {
 import { useState, useEffect } from "react";
 import { getExpenses } from "../services/expenseService";
 import { getGroups } from "../services/groupService";
+import { getAllUsers } from "../services/userService";
 import { useAuth } from "../contexts/AuthContext.jsx";
 
 export default function Activity() {
   const { user } = useAuth();
   const [activities, setActivities] = useState([]);
   const [groups, setGroups] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [filters, setFilters] = useState({
@@ -33,18 +35,49 @@ export default function Activity() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [filters.groupId, filters.category, filters.startDate, filters.endDate]);
 
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [expensesRes, groupsRes] = await Promise.all([
-        getExpenses(filters.groupId || 1, filters.category, filters.startDate, filters.endDate),
-        getGroups()
+      
+      // First get groups and users
+      const [groupsRes, usersRes] = await Promise.all([
+        getGroups(),
+        getAllUsers()
       ]);
-      console.log('Activity data responses:', { expensesRes, groupsRes });
-      setActivities(expensesRes.data || []);
-      setGroups(groupsRes.data || []);
+      
+      console.log('Activity data responses:', { groupsRes, usersRes });
+      const groups = groupsRes.data || [];
+      const users = usersRes.data || [];
+      setGroups(groups);
+      setAllUsers(users);
+      
+      // Then fetch expenses for each group
+      if (groups.length > 0) {
+        const allExpenses = [];
+        for (const group of groups) {
+          try {
+            // Only fetch from specific group if filter is set, otherwise fetch from all groups
+            if (!filters.groupId || group.id === parseInt(filters.groupId)) {
+              const expensesResponse = await getExpenses(group.id, filters.category, filters.startDate, filters.endDate);
+              const groupExpenses = expensesResponse.data || [];
+              // Add group name to each expense for display
+              const expensesWithGroupName = groupExpenses.map(expense => ({
+                ...expense,
+                groupName: group.name
+              }));
+              allExpenses.push(...expensesWithGroupName);
+            }
+          } catch (err) {
+            console.warn(`Failed to fetch expenses for group ${group.id}:`, err);
+            // Continue with other groups even if one fails
+          }
+        }
+        setActivities(allExpenses);
+      } else {
+        setActivities([]);
+      }
     } catch (err) {
       setError('Failed to fetch activities');
       console.error('Error fetching activities:', err);
@@ -69,7 +102,7 @@ export default function Activity() {
       endDate: '',
       searchTerm: ''
     });
-    fetchData();
+    // Don't call fetchData here as it will be called by useEffect when filters change
   };
 
   const filteredActivities = activities.filter(item =>
@@ -132,6 +165,12 @@ export default function Activity() {
 
   const calculateAverageSpent = () => {
     return filteredActivities.length > 0 ? calculateTotalSpent() / filteredActivities.length : 0;
+  };
+
+  // Helper function to get username by ID
+  const getUserName = (userId) => {
+    const foundUser = allUsers.find(u => u.id === userId);
+    return foundUser ? foundUser.name : 'Unknown User';
   };
 
   if (loading) {
@@ -364,16 +403,43 @@ export default function Activity() {
                       {new Date(item.time || item.createdAt).toLocaleDateString()}
                     </span>
                   </div>
-                  {item.owed && item.owed !== 'settled' && item.owed !== 'You paid' && (
-                    <p className="text-sm text-blue-600">
-                      You owe ₹{item.owed}
-                    </p>
-                  )}
-                  {item.owed === 'You paid' && (
-                    <p className="text-sm text-green-600">
-                      You paid for this expense
-                    </p>
-                  )}
+                  {(() => {
+                    // Check if the current user paid for this expense
+                    const currentUserPaid = item.paidByUserID === user?.id || item.paidBy?.id === user?.id;
+                    
+                    if (item.isSettled === 'SETTLED') {
+                      return (
+                        <p className="text-sm text-green-600 flex items-center">
+                          <CheckCircle className="w-3 h-3 mr-1" />
+                          Settled
+                        </p>
+                      );
+                    } else if (currentUserPaid) {
+                      return (
+                        <p className="text-sm text-green-600">
+                          You paid for this expense
+                        </p>
+                      );
+                    } else if (item.paidBy?.name) {
+                      return (
+                        <p className="text-sm text-blue-600">
+                          Paid by {item.paidBy.name}
+                        </p>
+                      );
+                    } else if (item.paidByUserID) {
+                      return (
+                        <p className="text-sm text-blue-600">
+                          Paid by {getUserName(item.paidByUserID)}
+                        </p>
+                      );
+                    } else {
+                      return (
+                        <p className="text-sm text-gray-500">
+                          Unknown payer
+                        </p>
+                      );
+                    }
+                  })()}
                 </div>
               </div>
             ))}

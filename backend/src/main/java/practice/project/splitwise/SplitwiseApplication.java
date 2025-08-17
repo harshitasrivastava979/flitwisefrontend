@@ -25,4 +25,5 @@ public class SplitwiseApplication implements CommandLineRunner {
         initService.initialise();
         System.out.println("Runner from commandLine finished");
     }
+
 }

@@ -26,4 +26,7 @@ export const getExpenses = (groupId, category, startDate, endDate) => {
 };
 
 // Mark group as settled
-export const markGroupSettled = (data) => api.post(`/api/${data.groupId}/settled`, data); 
+export const markGroupSettled = (data) => api.post(`/api/${data.groupId}/settled`, data);
+
+// Mark all expenses as settled
+export const markExpensesAsSettled = (groupId, userId) => api.post(`/api/groups/${groupId}/expenses/settle`, { userId }); 

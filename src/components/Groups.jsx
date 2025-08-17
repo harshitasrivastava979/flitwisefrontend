@@ -7,7 +7,7 @@ import {
   DollarSign,
   Calendar
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { createGroup, getGroups, deleteGroup } from "../services/groupService";
 import { getExpenses } from "../services/expenseService";
@@ -15,6 +15,7 @@ import { useAuth } from "../contexts/AuthContext.jsx";
 
 export default function Groups() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const [groups, setGroups] = useState([]);
   const [expenses, setExpenses] = useState([]);
@@ -29,7 +30,19 @@ export default function Groups() {
 
   useEffect(() => {
     fetchGroups();
-    fetchExpenses();
+  }, []);
+
+  useEffect(() => {
+    if (groups.length > 0) {
+      fetchExpenses();
+    }
+  }, [groups]);
+
+  // Cleanup modal state when component unmounts
+  useEffect(() => {
+    return () => {
+      setShowModal(false);
+    };
   }, []);
 
   const fetchGroups = async () => {
@@ -42,7 +55,13 @@ export default function Groups() {
       const groupsData = response.data || [];
       setGroups(groupsData);
     } catch (err) {
-      setError('Failed to fetch groups: ' + (err.response?.data?.message || err.message));
+      if (err.response?.status === 401) {
+        setError('Please log in to view your groups');
+      } else if (err.response?.status === 403) {
+        setError('You do not have permission to access this resource');
+      } else {
+        setError('Failed to fetch groups: ' + (err.response?.data?.message || err.message));
+      }
       console.error('Error fetching groups:', err);
     } finally {
       setLoading(false);
@@ -51,9 +70,21 @@ export default function Groups() {
 
   const fetchExpenses = async () => {
     try {
-      const response = await getExpenses();
-      console.log('Expenses response:', response);
-      setExpenses(response.data || []);
+      // Only fetch expenses for groups the user is a member of
+      if (groups.length > 0) {
+        const allExpenses = [];
+        for (const group of groups) {
+          try {
+            const response = await getExpenses(group.id);
+            const groupExpenses = response.data || [];
+            allExpenses.push(...groupExpenses);
+          } catch (err) {
+            console.error(`Error fetching expenses for group ${group.id}:`, err);
+            // Continue with other groups even if one fails
+          }
+        }
+        setExpenses(allExpenses);
+      }
     } catch (err) {
       console.error('Error fetching expenses:', err);
       setExpenses([]);
@@ -100,7 +131,13 @@ export default function Groups() {
       // Remove the group from the local state
       setGroups(groups.filter(group => group.id !== groupId));
     } catch (err) {
-      setError('Failed to delete group');
+      if (err.response?.status === 403) {
+        setError('You do not have permission to delete this group');
+      } else if (err.response?.status === 404) {
+        setError('Group not found');
+      } else {
+        setError('Failed to delete group: ' + (err.response?.data?.message || err.message));
+      }
       console.error('Error deleting group:', err);
     }
   };
@@ -313,9 +350,9 @@ export default function Groups() {
         </div>
       )}
 
-      {showModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center">
-          <div className="bg-white p-6 rounded-lg w-96 space-y-4 shadow-xl">
+      {showModal && location.pathname === '/groups' && (
+        <div className="fixed inset-0 z-[9999] bg-black/40 flex items-center justify-center p-4">
+          <div className="bg-white p-6 rounded-lg w-full max-w-md space-y-4 shadow-xl max-h-[90vh] overflow-y-auto">
             <h2 className="text-lg font-semibold text-gray-900">Create New Group</h2>
             <input
               type="text"
@@ -327,35 +364,50 @@ export default function Groups() {
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700">Group Members</label>
               {users.map((u, idx) => (
-                <div key={idx} className="flex items-center space-x-2 mb-1">
-                  <input
-                    type="text"
-                    value={u.name}
-                    onChange={e => handleUserChange(idx, 'name', e.target.value)}
-                    placeholder="Name"
-                    className="border border-gray-300 rounded-md px-2 py-1 flex-1"
-                    disabled={idx === 0 && !isCurrentUserEditable}
-                  />
-                  <input
-                    type="email"
-                    value={u.mail}
-                    onChange={e => handleUserChange(idx, 'mail', e.target.value)}
-                    placeholder="Email"
-                    className="border border-gray-300 rounded-md px-2 py-1 flex-1"
-                    disabled={idx === 0 && !isCurrentUserEditable}
-                  />
-                  {idx !== 0 && (
-                    <button type="button" onClick={() => removeUserField(idx)} className="text-red-500 hover:text-red-700">&times;</button>
-                  )}
+                <div key={idx} className="space-y-2 mb-3">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="text"
+                      value={u.name}
+                      onChange={e => handleUserChange(idx, 'name', e.target.value)}
+                      placeholder="Name"
+                      className="border border-gray-300 rounded-md px-3 py-2 flex-1 text-sm"
+                      disabled={idx === 0 && !isCurrentUserEditable}
+                    />
+                    <input
+                      type="email"
+                      value={u.mail}
+                      onChange={e => handleUserChange(idx, 'mail', e.target.value)}
+                      placeholder="Email"
+                      className="border border-gray-300 rounded-md px-3 py-2 flex-1 text-sm"
+                      disabled={idx === 0 && !isCurrentUserEditable}
+                    />
+                    {idx !== 0 && (
+                      <button 
+                        type="button" 
+                        onClick={() => removeUserField(idx)} 
+                        className="text-red-500 hover:text-red-700 p-1 ml-1"
+                        title="Remove member"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
               <button type="button" onClick={addUserField} className="text-teal-600 hover:underline text-sm mt-1">+ Add another member</button>
             </div>
-            <div className="flex justify-end space-x-3">
-              <button onClick={() => setShowModal(false)} className="text-sm text-gray-500 hover:underline">
+            <div className="flex justify-end space-x-3 pt-2">
+              <button 
+                onClick={() => setShowModal(false)} 
+                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md transition-colors"
+              >
                 Cancel
               </button>
-              <button onClick={handleCreateGroup} className="bg-teal-600 text-white px-4 py-2 rounded-md text-sm hover:bg-teal-700">
+              <button 
+                onClick={handleCreateGroup} 
+                className="bg-teal-600 text-white px-4 py-2 rounded-md text-sm hover:bg-teal-700 transition-colors"
+              >
                 Create
               </button>
             </div>

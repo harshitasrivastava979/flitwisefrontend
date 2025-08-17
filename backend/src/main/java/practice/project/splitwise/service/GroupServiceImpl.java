@@ -18,6 +18,7 @@ import practice.project.splitwise.service.strategy.SettleUpFactory;
 import practice.project.splitwise.service.strategy.SettleUpStrategy;
 
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -61,7 +62,22 @@ public class GroupServiceImpl implements GroupService {
                 .filter(expense -> expense.getIsSettled() != Settled.SETTLED)
                 .collect(Collectors.toList());
 
-        return strategy.settleUp(unsettledExpense);
+        List<TransactionDTO> transactions = strategy.settleUp(unsettledExpense);
+        
+        // DEBUG: Print what's being returned
+        System.out.println("=== SETTLEMENT DEBUG ===");
+        System.out.println("Group ID: " + groupId);
+        System.out.println("Unsettled expenses count: " + unsettledExpense.size());
+        System.out.println("Transactions generated: " + transactions.size());
+        
+        transactions.forEach(t -> 
+            System.out.println("Transaction: " + t.getFromUserName() + " (ID: " + t.getFromUserId() + 
+                             ") owes " + t.getToUserName() + " (ID: " + t.getToUserId() + 
+                             "): ₹" + t.getAmount())
+        );
+        System.out.println("=== END DEBUG ===");
+        
+        return transactions;
     }
 
     @Override
@@ -87,7 +103,20 @@ public class GroupServiceImpl implements GroupService {
             }
             allUsers.add(currUser);
         }
+        
+        // Properly establish the many-to-many relationship
+        // Set users on the group side
         savedGroup.setUsers(allUsers);
+        
+        // Set the group on each user's side (this is what creates the join table entries)
+        for (Users user : allUsers) {
+            if (user.getUsersGroups() == null) {
+                user.setUsersGroups(new ArrayList<>());
+            }
+            user.getUsersGroups().add(savedGroup);
+            userRepo.save(user); // This triggers the insert into user_group_mapping
+        }
+        
         savedGroup = groupRepository.save(savedGroup);
 
         //creating response dto
@@ -304,15 +333,37 @@ public class GroupServiceImpl implements GroupService {
     }
 
     @Override
-    public List<ExpenseDTO> getExpensesByFilter(Integer groupId, String category, String startDate, String endDate) {
+    public List<ExpenseDTO> getExpensesByFilter(Integer groupId, String category, String startDate, String endDate, String userEmail) {
+        System.out.println("getExpensesByFilter called with groupId: " + groupId + ", userEmail: " + userEmail);
+        
         // Find the group first
         Optional<UsersGroup> groupOpt = groupRepository.findById(groupId);
         if (groupOpt.isEmpty()) {
+            System.out.println("Group not found with ID: " + groupId);
             return new ArrayList<>();
         }
         
         UsersGroup group = groupOpt.get();
+        System.out.println("Found group: " + group.getName() + " (ID: " + group.getId() + ")");
+        
+        // Check if user is a member of this group
+        Optional<Users> userOpt = userRepo.findByMail(userEmail);
+        if (userOpt.isEmpty()) {
+            System.out.println("User not found for email: " + userEmail);
+            return new ArrayList<>();
+        }
+        
+        Users user = userOpt.get();
+        System.out.println("Found user: " + user.getName() + " (ID: " + user.getId() + ")");
+        
+        if (!group.getUsers().contains(user)) {
+            System.out.println("User " + user.getName() + " is not a member of group " + group.getName());
+            return new ArrayList<>(); // Return empty list if user is not a member
+        }
+        
+        System.out.println("User " + user.getName() + " is a member of group " + group.getName());
         List<Expense> groupExpenses = group.getExpenses();
+        System.out.println("Group has " + (groupExpenses != null ? groupExpenses.size() : 0) + " expenses");
         
         // Apply filters if provided
         List<Expense> filteredExpenses = groupExpenses.stream()
@@ -350,6 +401,8 @@ public class GroupServiceImpl implements GroupService {
                 return true;
             })
             .collect(Collectors.toList());
+        
+        System.out.println("Filtered expenses count: " + filteredExpenses.size());
         
         // Convert to DTOs
         List<ExpenseDTO> expenseDTOs = new ArrayList<>();
@@ -401,46 +454,77 @@ public class GroupServiceImpl implements GroupService {
             expenseDTOs.add(dto);
         }
         
+        System.out.println("Returning " + expenseDTOs.size() + " expense DTOs");
         return expenseDTOs;
     }
     
     @Override
-    public List<GroupCreationResponseDTO> getAllGroups() {
-        List<UsersGroup> groups = groupRepository.findAll();
-        List<GroupCreationResponseDTO> responseDTOs = new ArrayList<>();
-        
-        for (UsersGroup group : groups) {
-            GroupCreationResponseDTO responseDTO = new GroupCreationResponseDTO();
-            responseDTO.setId(group.getId());
-            responseDTO.setName(group.getName());
-            responseDTO.setDescription(group.getDescription());
-            responseDTO.setCurrency(group.getDefaultCurrency());
-            
-            // Calculate total spending
-            double totalSpending = group.getExpenses().stream()
-                    .mapToDouble(Expense::getAmount)
-                    .sum();
-            responseDTO.setTotalSpending(totalSpending);
-            
-            // Convert users to UserResponseDTO
-            List<UserResponseDTO> userResponseDTOList = new ArrayList<>();
-            for (Users user : group.getUsers()) {
-                UserResponseDTO userResponseDTO = new UserResponseDTO(user.getId(), user.getName(), user.getMail());
-                userResponseDTOList.add(userResponseDTO);
-            }
-            responseDTO.setUsersList(userResponseDTOList);
-            
-            responseDTOs.add(responseDTO);
+    public List<GroupCreationResponseDTO> getAllGroupsForUser(String userEmail) {
+        // Find the user first
+        Optional<Users> userOpt = userRepo.findByMail(userEmail);
+        if (userOpt.isEmpty()) {
+            System.out.println("User not found for email: " + userEmail);
+            return new ArrayList<>();
         }
         
+        Users user = userOpt.get();
+        System.out.println("Found user: " + user.getName() + " (ID: " + user.getId() + ")");
+        
+        List<UsersGroup> userGroups = user.getUsersGroups();
+        System.out.println("User has " + (userGroups != null ? userGroups.size() : 0) + " groups");
+        
+        List<GroupCreationResponseDTO> responseDTOs = new ArrayList<>();
+        
+        if (userGroups != null) {
+            for (UsersGroup group : userGroups) {
+                System.out.println("Processing group: " + group.getName() + " (ID: " + group.getId() + ")");
+                
+                GroupCreationResponseDTO responseDTO = new GroupCreationResponseDTO();
+                responseDTO.setId(group.getId());
+                responseDTO.setName(group.getName());
+                responseDTO.setDescription(group.getDescription());
+                responseDTO.setCurrency(group.getDefaultCurrency());
+                
+                // Calculate total spending
+                double totalSpending = group.getExpenses().stream()
+                        .mapToDouble(Expense::getAmount)
+                        .sum();
+                responseDTO.setTotalSpending(totalSpending);
+                
+                // Convert users to UserResponseDTO
+                List<UserResponseDTO> userResponseDTOList = new ArrayList<>();
+                if (group.getUsers() != null) {
+                    for (Users groupUser : group.getUsers()) {
+                        UserResponseDTO userResponseDTO = new UserResponseDTO(groupUser.getId(), groupUser.getName(), groupUser.getMail());
+                        userResponseDTOList.add(userResponseDTO);
+                    }
+                }
+                responseDTO.setUsersList(userResponseDTOList);
+                
+                responseDTOs.add(responseDTO);
+            }
+        }
+        
+        System.out.println("Returning " + responseDTOs.size() + " groups for user");
         return responseDTOs;
     }
     
     @Override
-    public void deleteGroup(int groupId) throws GroupNotFoundException {
+    public void deleteGroup(int groupId, String userEmail) throws GroupNotFoundException, UserNotMemberOfGroupException {
         Optional<UsersGroup> group = groupRepository.findById(groupId);
         if (group.isEmpty()) {
             throw new GroupNotFoundException("Group not found with id: " + groupId);
+        }
+        
+        // Check if user is a member of this group
+        Optional<Users> userOpt = userRepo.findByMail(userEmail);
+        if (userOpt.isEmpty()) {
+            throw new UserNotMemberOfGroupException("User not found");
+        }
+        
+        Users user = userOpt.get();
+        if (!group.get().getUsers().contains(user)) {
+            throw new UserNotMemberOfGroupException("User is not a member of this group");
         }
         
         // Delete all expenses associated with this group
@@ -453,6 +537,117 @@ public class GroupServiceImpl implements GroupService {
         
         // Delete the group
         groupRepository.delete(group.get());
+    }
+
+    @Override
+    public void addUserToGroup(Long userId, Long groupId) throws UserNotFoundException, GroupNotFoundException {
+        // Find the user
+        Optional<Users> userOpt = userRepo.findById(Long.valueOf(userId));
+        if (userOpt.isEmpty()) {
+            throw new UserNotFoundException("User not found with id: " + userId);
+        }
+        
+        // Find the group
+        Optional<UsersGroup> groupOpt = groupRepository.findById(groupId);
+        if (groupOpt.isEmpty()) {
+            throw new GroupNotFoundException("Group not found with id: " + groupId);
+        }
+        
+        Users user = userOpt.get();
+        UsersGroup group = groupOpt.get();
+        
+        // Check if user is already a member
+        if (user.getUsersGroups() != null && user.getUsersGroups().contains(group)) {
+            return; // User is already a member
+        }
+        
+        // Add user to group (this is the key part that creates the join table entry)
+        if (user.getUsersGroups() == null) {
+            user.setUsersGroups(new ArrayList<>());
+        }
+        user.getUsersGroups().add(group);
+        userRepo.save(user); // This triggers the insert into user_group_mapping
+        
+        // Also update the group side for consistency
+        if (group.getUsers() == null) {
+            group.setUsers(new ArrayList<>());
+        }
+        group.getUsers().add(user);
+        groupRepository.save(group);
+    }
+    
+    @Override
+    public boolean isUserInGroup(Long userId, Long groupId) throws UserNotFoundException, GroupNotFoundException {
+        // Find the user
+        Optional<Users> userOpt = userRepo.findById(userId);
+        if (userOpt.isEmpty()) {
+            throw new UserNotFoundException("User not found with id: " + userId);
+        }
+        
+        // Find the group
+        Optional<UsersGroup> groupOpt = groupRepository.findById(groupId);
+        if (groupOpt.isEmpty()) {
+            throw new GroupNotFoundException("Group not found with id: " + groupId);
+        }
+        
+        Users user = userOpt.get();
+        UsersGroup group = groupOpt.get();
+        
+        // Check if user is a member of the group
+        return user.getUsersGroups() != null && user.getUsersGroups().contains(group);
+    }
+    
+    @Override
+    public void markExpensesAsSettled(int groupId, int userId) throws GroupNotFoundException, UserNotFoundException {
+        // Validate user exists
+        Optional<Users> userOpt = userRepo.findById((long) userId);
+        if (userOpt.isEmpty()) {
+            throw new UserNotFoundException("User not found with id: " + userId);
+        }
+        
+        // Validate group exists
+        Optional<UsersGroup> groupOpt = groupRepository.findById((long) groupId);
+        if (groupOpt.isEmpty()) {
+            throw new GroupNotFoundException("Group not found with id: " + groupId);
+        }
+        
+        UsersGroup group = groupOpt.get();
+        
+        // Mark all unsettled expenses as settled
+        boolean hasUnsettledExpenses = false;
+        for (Expense expense : group.getExpenses()) {
+            if (expense.getIsSettled() != Settled.SETTLED) {
+                expense.setIsSettled(Settled.SETTLED);
+                expenseRepo.save(expense);
+                hasUnsettledExpenses = true;
+            }
+        }
+        
+        // Update group status to settled
+        if (hasUnsettledExpenses) {
+            group.setIsSettled(Settled.SETTLED);
+            groupRepository.save(group);
+        }
+        
+        // Clear all user splits to reset balances
+        for (Expense expense : group.getExpenses()) {
+            if (expense.getAmountSplit() != null) {
+                for (UsersSplit split : expense.getAmountSplit()) {
+                    // Reset split amounts to zero for settled expenses
+                    split.setAmount(0.0);
+                    split.setPercentage(null);
+                    split.setShares(null);
+                    usersSplitRepo.save(split);
+                }
+            }
+        }
+        
+        System.out.println("=== SETTLEMENT COMPLETE ===");
+        System.out.println("Group " + groupId + " marked as settled by user " + userId);
+        System.out.println("All expenses marked as SETTLED");
+        System.out.println("All user splits reset to zero");
+        System.out.println("Group status: SETTLED");
+        System.out.println("=== END SETTLEMENT ===");
     }
 
     @Scheduled(cron = "0 * * * * *") // Runs daily at midnight
@@ -474,7 +669,7 @@ public class GroupServiceImpl implements GroupService {
             newExpense.setRecurring(ex.getRecurring());
             newExpense.setInterval(ex.getInterval());
             // Calculate nextDueDate based on interval
-            java.util.Calendar cal = java.util.Calendar.getInstance();
+            Calendar cal = Calendar.getInstance();
             cal.setTime(ex.getNextDueDate());
             switch (ex.getInterval() != null ? ex.getInterval().toLowerCase() : "") {
                 case "daily": cal.add(java.util.Calendar.DATE, 1); break;
@@ -482,7 +677,7 @@ public class GroupServiceImpl implements GroupService {
                 case "monthly": cal.add(java.util.Calendar.MONTH, 1); break;
                 default: break;
             }
-            newExpense.setNextDueDate(cal.getTime());
+            newExpense.setNextDueDate(ex.getNextDueDate());
             // Deep copy splits
             List<UsersSplit> newSplits = new ArrayList<>();
             if (ex.getAmountSplit() != null) {
@@ -498,8 +693,7 @@ public class GroupServiceImpl implements GroupService {
             }
             newExpense.setAmountSplit(newSplits);
             expenseRepo.save(newExpense);
-            
-                        // Update budget for recurring expenses - each user based on their split
+            // Update budget for recurring expenses - each user based on their split
             if (newExpense.getCategory() != null) {
                 java.util.Date expenseDate = newExpense.getTimestamp();
                 java.time.LocalDate localDate = expenseDate.toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate();

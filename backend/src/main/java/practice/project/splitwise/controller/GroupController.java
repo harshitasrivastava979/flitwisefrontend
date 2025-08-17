@@ -2,12 +2,15 @@ package practice.project.splitwise.controller;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import practice.project.splitwise.dto.*;
 import practice.project.splitwise.exception.GroupNotFoundException;
 import practice.project.splitwise.exception.UserNotFoundException;
 import practice.project.splitwise.exception.UserNotMemberOfGroupException;
 import practice.project.splitwise.service.GroupService;
+import practice.project.splitwise.service.UserDetailsServiceImpl;
 
 import java.util.List;
 
@@ -16,6 +19,9 @@ import java.util.List;
 public class GroupController {
     @Autowired
     private GroupService groupService;
+    
+    @Autowired
+    private UserDetailsServiceImpl userDetailsService;
 
     @GetMapping("/settleUp/{groupId}/{userId}")
     public ResponseEntity settleUpForGroup(@PathVariable("groupId") int groupId,
@@ -24,7 +30,7 @@ public class GroupController {
         return ResponseEntity.ok(transactions);
     }
 
-    @PostMapping("/{groupId}/settled")
+    @PostMapping("/groups/{groupId}/settle")
     public ResponseEntity groupSettled(@RequestBody SettledDTO settled) throws UserNotFoundException,
             UserNotMemberOfGroupException, GroupNotFoundException {
         groupService.groupSettled(settled);
@@ -49,23 +55,76 @@ public class GroupController {
             @RequestParam(required = false) String category,
             @RequestParam(required = false) String startDate,
             @RequestParam(required = false) String endDate) {
-        List<ExpenseDTO> expenses = groupService.getExpensesByFilter(groupId, category, startDate, endDate);
+        
+        // Get current authenticated user
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        String userEmail = authentication.getName();
+        
+        List<ExpenseDTO> expenses = groupService.getExpensesByFilter(groupId, category, startDate, endDate, userEmail);
         return ResponseEntity.ok(expenses);
     }
     
     @GetMapping("/groups")
     public ResponseEntity<List<GroupCreationResponseDTO>> getAllGroups() {
-        List<GroupCreationResponseDTO> groups = groupService.getAllGroups();
+        // Get current authenticated user
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        String userEmail = authentication.getName();
+        
+        List<GroupCreationResponseDTO> groups = groupService.getAllGroupsForUser(userEmail);
         return ResponseEntity.ok(groups);
     }
     
     @DeleteMapping("/groups/{groupId}")
     public ResponseEntity<String> deleteGroup(@PathVariable int groupId) {
         try {
-            groupService.deleteGroup(groupId);
+            // Get current authenticated user
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            String userEmail = authentication.getName();
+            
+            groupService.deleteGroup(groupId, userEmail);
             return ResponseEntity.ok("Group deleted successfully");
         } catch (GroupNotFoundException e) {
-            return ResponseEntity.notFound().build();
+            return ResponseEntity.status(404).build();
+        } catch (UserNotMemberOfGroupException e) {
+            return ResponseEntity.status(403).body("You are not authorized to delete this group");
+        }
+    }
+    
+    @PostMapping("/groups/{groupId}/users/{userId}")
+    public ResponseEntity<String> addUserToGroup(@PathVariable Long groupId, @PathVariable Long userId) {
+        try {
+            groupService.addUserToGroup(userId, groupId);
+            return ResponseEntity.ok("User added to group successfully");
+        } catch (UserNotFoundException e) {
+            return ResponseEntity.status(404).body("User not found");
+        } catch (GroupNotFoundException e) {
+            return ResponseEntity.status(404).body("Group not found");
+        }
+    }
+    
+    @GetMapping("/groups/{groupId}/users/{userId}/check")
+    public ResponseEntity<Boolean> isUserInGroup(@PathVariable Long groupId, @PathVariable Long userId) {
+        try {
+            boolean isMember = groupService.isUserInGroup(userId, groupId);
+            return ResponseEntity.ok(isMember);
+        } catch (UserNotFoundException e) {
+            return ResponseEntity.status(404).build();
+        } catch (GroupNotFoundException e) {
+            return ResponseEntity.status(404).build();
+        }
+    }
+    
+    @PostMapping("/groups/{groupId}/expenses/settle")
+    public ResponseEntity<String> markAsSettled(@PathVariable int groupId, @RequestBody SettledDTO settledDTO) {
+        try {
+            groupService.markExpensesAsSettled(groupId, settledDTO.getUserId());
+            return ResponseEntity.ok("All expenses marked as settled successfully");
+        } catch (GroupNotFoundException e) {
+            return ResponseEntity.status(404).body("Group not found");
+        } catch (UserNotFoundException e) {
+            return ResponseEntity.status(404).body("User not found");
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body("Failed to mark expenses as settled: " + e.getMessage());
         }
     }
 }

@@ -51,9 +51,14 @@ public class HeapBasedStrategy implements SettleUpStrategy {
             double settleAmount = Math.min(debtAmount, creditAmount);
 
             TransactionDTO transaction = new TransactionDTO(
+                    debtor.getKey().getId().intValue(),
                     debtor.getKey().getName(),
+                    creditor.getKey().getId().intValue(),
                     creditor.getKey().getName(),
-                    settleAmount
+                    settleAmount,
+                    "Settlement for group expenses",
+                    "PENDING",
+                    new java.util.Date().toString()
             );
             transactions.add(transaction);
 

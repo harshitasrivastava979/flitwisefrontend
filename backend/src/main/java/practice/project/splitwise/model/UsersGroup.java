@@ -25,11 +25,6 @@ public class UsersGroup extends BaseModel {
     @OneToMany
     private List<Expense> expenses;
 
-    @ManyToMany
-    @JoinTable(
-            name = "user_group_mapping",
-            joinColumns = @JoinColumn(name = "group_id"),
-            inverseJoinColumns = @JoinColumn(name = "user_id")
-    )
+    @ManyToMany(mappedBy = "usersGroups")
     private List<Users> users;
 }

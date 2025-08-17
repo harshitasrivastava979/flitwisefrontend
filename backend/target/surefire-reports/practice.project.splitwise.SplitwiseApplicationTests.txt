@@ -1,4 +1,0 @@
--------------------------------------------------------------------------------
-Test set: practice.project.splitwise.SplitwiseApplicationTests
--------------------------------------------------------------------------------
-Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 10.976 s - in practice.project.splitwise.SplitwiseApplicationTests

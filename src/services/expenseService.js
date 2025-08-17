@@ -1,9 +1,13 @@
 import api from './api';
  
-// Get expenses with filters
+// Get expenses with filters - now requires groupId
 export const getExpenses = (groupId, category, startDate, endDate) => {
+  if (!groupId) {
+    return Promise.reject(new Error('Group ID is required'));
+  }
+  
   const params = new URLSearchParams();
-  params.append('groupId', groupId || 1); // Default to group 1 if not provided
+  params.append('groupId', groupId);
   if (category) params.append('category', category);
   if (startDate) params.append('startDate', startDate);
   if (endDate) params.append('endDate', endDate);

@@ -25,6 +25,7 @@ import {
 import { getBudgetSummary, getUserBudgets, getExceededBudgets, getNearingLimit } from "../services/budgetService";
 import { getExpenses } from "../services/expenseService";
 import { getGroups } from "../services/groupService";
+import { getAllUsers } from "../services/userService";
 import { useAuth } from "../contexts/AuthContext.jsx";
 
 export default function Dashboard() {
@@ -39,6 +40,7 @@ export default function Dashboard() {
   });
   const [recentExpenses, setRecentExpenses] = useState([]);
   const [userGroups, setUserGroups] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
   const [exceededBudgets, setExceededBudgets] = useState([]);
   const [nearingLimitBudgets, setNearingLimitBudgets] = useState([]);
   const [userStats, setUserStats] = useState(null);
@@ -96,22 +98,39 @@ export default function Dashboard() {
         }
 
         try {
-          console.log('Fetching groups');
-          const groupsResponse = await getGroups();
+          console.log('Fetching groups and users');
+          const [groupsResponse, usersResponse] = await Promise.all([
+            getGroups(),
+            getAllUsers()
+          ]);
           console.log('Groups response:', groupsResponse);
-          setUserGroups(groupsResponse.data || []);
+          console.log('Users response:', usersResponse);
+          const groups = groupsResponse.data || [];
+          const users = usersResponse.data || [];
+          setUserGroups(groups);
+          setAllUsers(users);
+          
+          // Fetch expenses for each group
+          if (groups.length > 0) {
+            const allExpenses = [];
+            for (const group of groups) {
+              try {
+                const expensesResponse = await getExpenses(group.id);
+                const groupExpenses = expensesResponse.data || [];
+                allExpenses.push(...groupExpenses);
+              } catch (err) {
+                console.warn(`Failed to fetch expenses for group ${group.id}:`, err);
+                // Continue with other groups even if one fails
+              }
+            }
+            setRecentExpenses(allExpenses);
+          } else {
+            setRecentExpenses([]);
+          }
         } catch (err) {
-          console.warn('Failed to fetch groups:', err);
+          console.warn('Failed to fetch groups or users:', err);
           setUserGroups([]);
-        }
-
-        try {
-          console.log('Fetching expenses');
-          const expensesResponse = await getExpenses(1); // Use default group ID
-          console.log('Expenses response:', expensesResponse);
-          setRecentExpenses(expensesResponse.data || []);
-        } catch (err) {
-          console.warn('Failed to fetch expenses:', err);
+          setAllUsers([]);
           setRecentExpenses([]);
         }
 
@@ -168,6 +187,12 @@ export default function Dashboard() {
 
   const handleViewAllGroups = () => {
     navigate('/groups');
+  };
+
+  // Helper function to get username by ID
+  const getUserName = (userId) => {
+    const foundUser = allUsers.find(u => u.id === userId);
+    return foundUser ? foundUser.name : 'Unknown User';
   };
 
   if (loading) {
@@ -397,19 +422,41 @@ export default function Dashboard() {
                 </div>
                 <div className="text-right">
                   <p className="font-semibold text-gray-900">₹{item.amount || 0}</p>
-                  {item.owed === 'settled' ? (
-                    <p className="text-sm text-green-600 flex items-center">
-                      <CheckCircle className="w-3 h-3 mr-1" />
-                      Settled
-                    </p>
-                  ) : item.owed && item.owed !== 'You paid' ? (
-                    <p className="text-sm text-blue-600 flex items-center">
-                      <ArrowUpRight className="w-3 h-3 mr-1" />
-                      You owe ₹{item.owed}
-                    </p>
-                  ) : (
-                    <p className="text-sm text-gray-500">You paid</p>
-                  )}
+                  {(() => {
+                    // Check if the current user paid for this expense
+                    const currentUserPaid = item.paidByUserID === user?.id || item.paidBy?.id === user?.id;
+                    
+                    if (item.isSettled === 'SETTLED') {
+                      return (
+                        <p className="text-sm text-green-600 flex items-center">
+                          <CheckCircle className="w-3 h-3 mr-1" />
+                          Settled
+                        </p>
+                      );
+                    } else if (currentUserPaid) {
+                      return (
+                        <p className="text-sm text-gray-500">You paid</p>
+                      );
+                    } else if (item.paidBy?.name) {
+                      return (
+                        <p className="text-sm text-blue-600 flex items-center">
+                          <ArrowUpRight className="w-3 h-3 mr-1" />
+                          Paid by {item.paidBy.name}
+                        </p>
+                      );
+                    } else if (item.paidByUserID) {
+                      return (
+                        <p className="text-sm text-blue-600 flex items-center">
+                          <ArrowUpRight className="w-3 h-3 mr-1" />
+                          Paid by {getUserName(item.paidByUserID)}
+                        </p>
+                      );
+                    } else {
+                      return (
+                        <p className="text-sm text-gray-500">Unknown payer</p>
+                      );
+                    }
+                  })()}
                 </div>
               </div>
             ))}
