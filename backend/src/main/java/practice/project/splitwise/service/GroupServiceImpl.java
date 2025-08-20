@@ -39,6 +39,9 @@ public class GroupServiceImpl implements GroupService {
     @Autowired
     private BudgetService budgetService;
 
+    @Autowired
+    private EmailService emailService;
+
     @Override
     public List<TransactionDTO> settleUpByGroupId(int groupId, int userId) throws UserNotFoundException, GroupNotFoundException, UserNotMemberOfGroupException {
         // check if valid user exist
@@ -118,6 +121,17 @@ public class GroupServiceImpl implements GroupService {
         }
         
         savedGroup = groupRepository.save(savedGroup);
+
+        // Send notification emails to all users that they've been added to the group
+        for (Users user : allUsers) {
+            System.out.println("Attempting to send 'added to group' email to: " + user.getMail());
+            try {
+                sendAddedToGroupEmail(user, savedGroup);
+                System.out.println("Email queued to: " + user.getMail());
+            } catch (Exception e) {
+                System.err.println("Failed to queue email to: " + user.getMail() + ", error: " + e.getMessage());
+            }
+        }
 
         //creating response dto
         GroupCreationResponseDTO responseDTO = new GroupCreationResponseDTO();
@@ -541,14 +555,14 @@ public class GroupServiceImpl implements GroupService {
 
     @Override
     public void addUserToGroup(Long userId, Long groupId) throws UserNotFoundException, GroupNotFoundException {
-        // Find the user
-        Optional<Users> userOpt = userRepo.findById(Long.valueOf(userId));
+        // Find the user (use Integer ID type to match entity)
+        Optional<Users> userOpt = userRepo.findById(userId.intValue());
         if (userOpt.isEmpty()) {
             throw new UserNotFoundException("User not found with id: " + userId);
         }
         
-        // Find the group
-        Optional<UsersGroup> groupOpt = groupRepository.findById(groupId);
+        // Find the group (use Integer ID type to match entity)
+        Optional<UsersGroup> groupOpt = groupRepository.findById(groupId.intValue());
         if (groupOpt.isEmpty()) {
             throw new GroupNotFoundException("Group not found with id: " + groupId);
         }
@@ -574,6 +588,15 @@ public class GroupServiceImpl implements GroupService {
         }
         group.getUsers().add(user);
         groupRepository.save(group);
+
+        // Send notification email to the added user
+        System.out.println("Attempting to send 'added to group' email to: " + user.getMail());
+        try {
+            sendAddedToGroupEmail(user, group);
+            System.out.println("Email queued to: " + user.getMail());
+        } catch (Exception e) {
+            System.err.println("Failed to queue email to: " + user.getMail() + ", error: " + e.getMessage());
+        }
     }
     
     @Override
@@ -715,5 +738,21 @@ public class GroupServiceImpl implements GroupService {
             ex.setNextDueDate(cal.getTime());
             expenseRepo.save(ex);
         }
+    }
+
+    private void sendAddedToGroupEmail(Users user, UsersGroup group) {
+        if (user.getMail() == null || user.getMail().isEmpty()) {
+            return;
+        }
+        String subject = "You've been added to a group: " + (group.getName() != null ? group.getName() : "(Unnamed)");
+        String body = String.format(
+                "Hi %s,\n\n" +
+                "You've been added to the group '%s' in Splitwise Clone.\n" +
+                "You can now view expenses and participate in this group.\n\n" +
+                "Thanks,\nSplitwise Clone Team",
+                user.getName() != null ? user.getName() : "there",
+                group.getName() != null ? group.getName() : String.valueOf(group.getId())
+        );
+        emailService.sendSimpleEmail(user.getMail(), subject, body);
     }
 }

@@ -13,7 +13,7 @@ public class EmailService {
     @Autowired
     private JavaMailSender mailSender;
 
-    @Async
+    @Async("emailTaskExecutor")
     public void sendSimpleEmail(String to, String subject, String text) {
         try {
             SimpleMailMessage message = new SimpleMailMessage();
@@ -28,7 +28,7 @@ public class EmailService {
         }
     }
 
-    @Async
+    @Async("emailTaskExecutor")
     public void sendHtmlEmail(String to, String subject, String htmlBody) {
         // Implementation for HTML emails if needed
     }

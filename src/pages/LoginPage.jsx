@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { login, register } from "../services/authService";
+import OtpVerificationModal from "../components/OtpVerificationModal.jsx";
 import { useAuth } from "../contexts/AuthContext.jsx";
 
 export default function LoginPage() {
@@ -12,6 +13,7 @@ export default function LoginPage() {
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [otpOpen, setOtpOpen] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -25,14 +27,8 @@ export default function LoginPage() {
     
     try {
       if (isSignup) {
-        // Register API call
-        await register({
-          name,
-          mail: email,
-          password,
-        });
-        setError("Registration successful! Please login.");
-        setIsSignup(false);
+        await register({ name, mail: email, password });
+        setOtpOpen(true);
       } else {
         // Login API call
         const response = await login({
@@ -207,6 +203,16 @@ export default function LoginPage() {
           </div>
         </div>
       </div>
+      <OtpVerificationModal
+        isOpen={otpOpen}
+        email={email}
+        onVerified={() => {
+          setOtpOpen(false);
+          setIsSignup(false);
+          setError("Email verified! Please log in.");
+        }}
+        onClose={() => setOtpOpen(false)}
+      />
     </div>
   );
 }

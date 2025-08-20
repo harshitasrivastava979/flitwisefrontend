@@ -18,11 +18,11 @@ public class Users extends BaseModel {
     private String name;
     private String mail;
     private String password;
-  //  @Column(name = "email_verified")
-   // private Boolean emailVerified = false;
+    // Email verification flag
+    private Boolean emailVerified = false;
 
- //   @Column(name = "account_locked_until")
-    //private LocalDateTime accountLockedUntil;
+    // Account lock until timestamp due to excessive OTP failures
+    private LocalDateTime accountLockedUntil;
 // Added for authentication
 
     @ManyToMany
@@ -32,4 +32,11 @@ public class Users extends BaseModel {
             inverseJoinColumns = @JoinColumn(name = "group_id")
     )
     private List<UsersGroup> usersGroups;
+
+    public boolean isAccountLocked() {
+        if (accountLockedUntil == null) {
+            return false;
+        }
+        return LocalDateTime.now().isBefore(accountLockedUntil);
+    }
 }

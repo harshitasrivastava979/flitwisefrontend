@@ -10,6 +10,14 @@ export const register = async (data) => {
   return response;
 };
 
+export const sendSignupOtp = async (email) => {
+  return api.post('/api/auth/otp/send', { email, otpType: 'SIGNUP' });
+};
+
+export const verifySignupOtp = async (email, otpCode) => {
+  return api.post('/api/auth/otp/verify', { email, otpCode, otpType: 'SIGNUP' });
+};
+
 // Helper function to extract token from login response
 export const extractTokenFromResponse = (response) => {
   // Adjust this based on your backend response structure
