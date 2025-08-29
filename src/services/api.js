@@ -1,8 +1,15 @@
 import axios from 'axios';
-import { API_BASE_URL } from '../utils/constants';
+
+// Prefer Vite env, fallback to CRA env, then localhost
+const rawBaseUrl = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL)
+  || (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_URL)
+  || 'http://localhost:8080';
+
+// Normalize: remove trailing slash
+const baseURL = rawBaseUrl.replace(/\/$/, '');
 
 const api = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL,
   headers: {
     'Content-Type': 'application/json',
   },
