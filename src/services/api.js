@@ -1,9 +1,7 @@
 import axios from 'axios';
 
-// Prefer Vite env, fallback to CRA env, then localhost
-const rawBaseUrl = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL)
-  || (typeof process !== 'undefined' && process.env && process.env.REACT_APP_API_URL)
-  || 'http://localhost:8080';
+// Use only Vite env (for Render and local dev via .env)
+const rawBaseUrl = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL);
 
 // Normalize: remove trailing slash
 const baseURL = rawBaseUrl.replace(/\/$/, '');
@@ -13,7 +11,7 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 10000, // 10 second timeout
+  timeout: 10000,
 });
 
 // Request interceptor to add JWT token
@@ -26,29 +24,14 @@ api.interceptors.request.use(
     console.log(`API Request: ${config.method?.toUpperCase()} ${config.url}`, config.data);
     return config;
   },
-  (error) => {
-    console.error('API Request Error:', error);
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
-// Response interceptor to handle authentication errors
+// Response interceptor
 api.interceptors.response.use(
-  (response) => {
-    console.log(`API Response: ${response.status} ${response.config.url}`, response.data);
-    return response;
-  },
+  (response) => response,
   (error) => {
-    console.error('API Response Error:', {
-      status: error.response?.status,
-      statusText: error.response?.statusText,
-      url: error.config?.url,
-      message: error.message,
-      data: error.response?.data
-    });
-    
     if (error.response?.status === 401) {
-      // Token expired or invalid, redirect to login
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       window.location.href = '/login';
@@ -57,4 +40,5 @@ api.interceptors.response.use(
   }
 );
 
-export default api; 
+export default api;
+
