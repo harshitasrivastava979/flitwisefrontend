@@ -4,7 +4,7 @@ import {
   ChevronRight, 
   Calendar as CalendarIcon,
   Repeat,
-  DollarSign
+  IndianRupee
 } from 'lucide-react';
 import { getExpenses } from '../services/expenseService';
 

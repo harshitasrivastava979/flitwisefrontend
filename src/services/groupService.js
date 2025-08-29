@@ -9,6 +9,9 @@ export const getGroups = () => api.get('/api/groups');
 // Delete a group
 export const deleteGroup = (groupId) => api.delete(`/api/groups/${groupId}`);
 
+// Update a group
+export const updateGroup = (groupId, data) => api.put(`/api/groups/${groupId}`, data);
+
 // Add an expense to a group
 export const addExpense = (data) => api.post('/api/addExpense', data);
 

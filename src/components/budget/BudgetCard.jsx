@@ -1,11 +1,11 @@
 import React from 'react';
 import { 
-  DollarSign, 
   TrendingUp, 
   AlertTriangle, 
   CheckCircle,
   Edit,
-  Trash2
+  Trash2,
+  IndianRupee
 } from 'lucide-react';
 import BudgetProgress from './BudgetProgress';
 
@@ -61,7 +61,7 @@ export default function BudgetCard({
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-3">
             <div className="w-12 h-12 bg-gradient-to-r from-teal-500 to-teal-600 rounded-lg flex items-center justify-center">
-              <DollarSign className="w-6 h-6 text-white" />
+              <IndianRupee className="w-6 h-6 text-white" />
             </div>
             <div>
               <h3 className="font-semibold text-gray-900 text-lg capitalize">

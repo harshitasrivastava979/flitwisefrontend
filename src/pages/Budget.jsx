@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
 import { 
-  DollarSign, 
   Plus, 
   Trash2, 
   TrendingUp,
   AlertTriangle,
-  CheckCircle
+  CheckCircle,
+  IndianRupee
 } from "lucide-react";
 import { 
   createBudget, 
@@ -168,7 +168,7 @@ export default function Budget() {
       {/* Budget Cards */}
       {budgets.length === 0 ? (
         <div className="text-center py-12">
-          <DollarSign className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+          <IndianRupee className="w-16 h-16 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No budgets yet</h3>
           <p className="text-gray-600 mb-4">Create your first budget to start tracking your spending</p>
           <button
@@ -198,7 +198,7 @@ export default function Budget() {
                         isExceeded ? 'bg-red-100' : 
                         isNearing ? 'bg-yellow-100' : 'bg-green-100'
                       }`}>
-                        <DollarSign className={`w-6 h-6 ${
+                        <IndianRupee className={`w-6 h-6 ${
                           isExceeded ? 'text-red-600' : 
                           isNearing ? 'text-yellow-600' : 'text-green-600'
                         }`} />

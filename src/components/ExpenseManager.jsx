@@ -3,7 +3,7 @@ import {
   Plus, 
   Edit, 
   Trash2, 
-  DollarSign, 
+  IndianRupee, 
   Users, 
   Calendar,
   Tag,
@@ -193,7 +193,7 @@ export default function ExpenseManager({ groupId, onExpenseAdded }) {
 
       {expenses.length === 0 ? (
         <div className="text-center py-12">
-          <DollarSign className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+          <IndianRupee className="w-16 h-16 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No expenses yet</h3>
           <p className="text-gray-600 mb-4">Add your first expense to start tracking</p>
           <button
@@ -220,7 +220,7 @@ export default function ExpenseManager({ groupId, onExpenseAdded }) {
                   </div>
                   <div className="flex items-center space-x-4 text-sm text-gray-600">
                     <span className="flex items-center">
-                      <DollarSign className="w-4 h-4 mr-1" />
+                      <IndianRupee className="w-4 h-4 mr-1" />
                       ₹{expense.amount}
                     </span>
                     <span className="flex items-center">

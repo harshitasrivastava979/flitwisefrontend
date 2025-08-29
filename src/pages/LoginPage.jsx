@@ -13,6 +13,7 @@ export default function LoginPage() {
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [otpOpen, setOtpOpen] = useState(false);
 
   const handleSubmit = async (e) => {
@@ -24,10 +25,12 @@ export default function LoginPage() {
 
     setLoading(true);
     setError("");
+    setSuccess("");
     
     try {
       if (isSignup) {
         await register({ name, mail: email, password });
+        setSuccess("Registration successful! Please verify the OTP sent to your email.");
         setOtpOpen(true);
       } else {
         // Login API call
@@ -54,7 +57,28 @@ export default function LoginPage() {
         }
       }
     } catch (err) {
-      setError(err.response?.data?.message || err.response?.data || "An error occurred. Please try again.");
+      const errorMessage = err.response?.data?.message || err.response?.data || "An error occurred. Please try again.";
+      
+      // Handle specific error cases with better user guidance
+      if (err.response?.status === 401) {
+        if (errorMessage.toLowerCase().includes("email not verified")) {
+          setError("Email not verified. Please check your email and verify the OTP, or sign up if you haven't registered yet.");
+        } else if (errorMessage.toLowerCase().includes("invalid credentials")) {
+          setError("Invalid email or password. Please check your credentials or sign up if you haven't registered yet.");
+        } else {
+          setError("Invalid email or password. Please check your credentials.");
+        }
+      } else if (err.response?.status === 404) {
+        setError("User not found. Please sign up if you haven't registered yet.");
+      } else if (err.response?.status === 400) {
+        if (errorMessage.toLowerCase().includes("email already in use")) {
+          setError("Email already registered. Please log in instead or use a different email.");
+        } else {
+          setError(errorMessage);
+        }
+      } else {
+        setError(errorMessage);
+      }
       console.error(err);
     } finally {
       setLoading(false);
@@ -68,13 +92,14 @@ export default function LoginPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
             <div className="flex items-center">
-              <div className="text-2xl font-bold text-teal-600">Splitwise</div>
+              <div className="text-2xl font-bold text-teal-600">FinSight</div>
             </div>
             <div className="flex space-x-4">
               <button
                 onClick={() => {
                   setIsSignup(false);
                   setError("");
+                  setSuccess("");
                 }}
                 className={`px-4 py-2 rounded-md text-sm font-medium ${
                   !isSignup
@@ -88,6 +113,7 @@ export default function LoginPage() {
                 onClick={() => {
                   setIsSignup(true);
                   setError("");
+                  setSuccess("");
                 }}
                 className={`px-4 py-2 rounded-md text-sm font-medium ${
                   isSignup
@@ -112,12 +138,14 @@ export default function LoginPage() {
               </h2>
             </div>
 
+            {success && (
+              <div className="mb-4 p-3 rounded-md text-sm bg-green-50 text-green-700 border border-green-200">
+                {success}
+              </div>
+            )}
+
             {error && (
-              <div className={`mb-4 p-3 rounded-md text-sm ${
-                error.includes("successful") 
-                  ? "bg-green-50 text-green-700 border border-green-200" 
-                  : "bg-red-50 text-red-700 border border-red-200"
-              }`}>
+              <div className="mb-4 p-3 rounded-md text-sm bg-red-50 text-red-700 border border-red-200">
                 {error}
               </div>
             )}
@@ -196,9 +224,7 @@ export default function LoginPage() {
           {/* Footer text */}
           <div className="mt-8 text-center">
             <p className="text-sm text-gray-600">
-              Splitwise is a free tool for friends and roommates to track bills and other shared expenses,
-              <br />
-              so that everyone gets paid back.
+              Track budgets and understand where your money is going with FinSight.
             </p>
           </div>
         </div>
@@ -209,7 +235,7 @@ export default function LoginPage() {
         onVerified={() => {
           setOtpOpen(false);
           setIsSignup(false);
-          setError("Email verified! Please log in.");
+          setSuccess("Email verified successfully! Please log in.");
         }}
         onClose={() => setOtpOpen(false)}
       />

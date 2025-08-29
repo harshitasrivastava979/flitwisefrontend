@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Repeat, 
   Calendar, 
-  DollarSign, 
+  IndianRupee, 
   Edit, 
   Trash2, 
   Plus,
@@ -135,7 +135,7 @@ export default function RecurringExpenses({ groupId }) {
         <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
           <div className="flex items-center">
             <div className="p-2 bg-green-100 rounded-lg">
-              <DollarSign className="w-6 h-6 text-green-600" />
+              <IndianRupee className="w-6 h-6 text-green-600" />
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-600">Monthly Total</p>

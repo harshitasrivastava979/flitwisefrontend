@@ -1,5 +1,6 @@
 // Add reusable helper functions here
  
 export function formatCurrency(amount) {
-  return `$${amount.toFixed(2)}`;
+  const value = Number.isFinite(Number(amount)) ? Number(amount) : 0;
+  return `₹${value.toFixed(2)}`;
 } 

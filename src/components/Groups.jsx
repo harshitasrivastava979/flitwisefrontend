@@ -1,15 +1,15 @@
-import { 
-  Users, 
-  Plus, 
-  Trash2, 
+import {
+  Users,
+  Plus,
+  Trash2,
   ChevronRight,
   Receipt,
-  DollarSign,
-  Calendar
+  Calendar,
+  Edit
 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { createGroup, getGroups, deleteGroup } from "../services/groupService";
+import { createGroup, getGroups, deleteGroup, updateGroup } from "../services/groupService";
 import { getExpenses } from "../services/expenseService";
 import { useAuth } from "../contexts/AuthContext.jsx";
 
@@ -23,7 +23,10 @@ export default function Groups() {
   const [error, setError] = useState(null);
 
   const [showModal, setShowModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingGroup, setEditingGroup] = useState(null);
   const [newGroupName, setNewGroupName] = useState('');
+  const [newGroupDescription, setNewGroupDescription] = useState('');
   const [users, setUsers] = useState([{ name: user?.name || '', mail: user?.mail || '' }]);
 
   const isCurrentUserEditable = !(user?.name && user?.mail);
@@ -42,6 +45,7 @@ export default function Groups() {
   useEffect(() => {
     return () => {
       setShowModal(false);
+      setShowEditModal(false);
     };
   }, []);
 
@@ -49,7 +53,7 @@ export default function Groups() {
     try {
       setLoading(true);
       setError(null);
-      
+
       const response = await getGroups();
       console.log('Groups response:', response);
       const groupsData = response.data || [];
@@ -104,31 +108,85 @@ export default function Groups() {
     setUsers(users.filter((_, i) => i !== index));
   };
 
-  const handleCreateGroup = async () => {
-    if (newGroupName.trim() && users.every(u => u.name.trim() && u.mail.trim())) {
+  const handleEditGroup = (group) => {
+    setEditingGroup(group);
+    setNewGroupName(group.name || '');
+    setNewGroupDescription(group.description || '');
+    setUsers(group.usersList?.map(u => ({ name: u.name || '', mail: u.mail || '' })) || []);
+    setShowEditModal(true);
+  };
+
+  const handleUpdateGroup = async () => {
+    if (!editingGroup || !newGroupName.trim() || users.every(u => u.name.trim() && u.mail.trim())) {
       try {
-        const groupData = {
+        const updateData = {
           name: newGroupName,
-          description: `Group created by ${user?.name || 'User'}`,
-          currency: 'INR',
+          description: newGroupDescription,
           usersList: users
         };
-        const response = await createGroup(groupData);
-        setGroups([...groups, response.data]);
+        
+        const response = await updateGroup(editingGroup.id, updateData);
+        
+        // Update the groups list with the updated group
+        setGroups(groups.map(g => g.id === editingGroup.id ? response.data : g));
+        
+        setShowEditModal(false);
+        setEditingGroup(null);
         setNewGroupName('');
+        setNewGroupDescription('');
         setUsers([{ name: user?.name || '', mail: user?.mail || '' }]);
-        setShowModal(false);
+        setError('');
       } catch (err) {
-        setError('Failed to create group');
-        console.error('Error creating group:', err);
+        if (err.response?.status === 404) {
+          setError("❌ One or more users do not exist. Ask them to register first.");
+        } else if (err.response?.status === 403) {
+          setError("⚠️ You are not authorized to update this group.");
+        } else {
+          setError("Something went wrong updating the group.");
+        }
+        console.error("Error updating group:", err);
       }
     }
   };
 
-  const handleDelete = async (groupId) => {
+const handleCreateGroup = async () => {
+  if (newGroupName.trim() && users.every(u => u.name.trim() && u.mail.trim())) {
+    try {
+      const groupData = {
+        name: newGroupName,
+        description: `Group created by ${user?.name || 'User'}`,
+        currency: 'INR',
+        usersList: users
+      };
+      const response = await createGroup(groupData);
+      setGroups([...groups, response.data]);
+      setNewGroupName('');
+      setUsers([{ name: user?.name || '', mail: user?.mail || '' }]);
+      setShowModal(false);
+      setError(''); // clear old errors if any
+    }
+ catch (err) {
+  if (err.response?.status === 404) {
+    setError("❌ One or more users do not exist. Ask them to register first.");
+  } else if (err.response?.status === 403) {
+    setError("⚠️ You are not authorized to create this group.");
+  } else {
+    setError("Something went wrong creating the group.");
+  }
+  console.error("Error creating group:", err);
+}
+
+  }
+};
+
+  const handleDelete = async (groupId, groupName) => {
+    const confirmDelete = window.confirm(
+      `Are you sure you want to delete the group ? This cannot be undone.`
+    );
+    if (!confirmDelete) return;
+
     try {
       await deleteGroup(groupId);
-      // Remove the group from the local state
       setGroups(groups.filter(group => group.id !== groupId));
     } catch (err) {
       if (err.response?.status === 403) {
@@ -153,8 +211,8 @@ export default function Groups() {
   const formatDate = (dateString) => {
     if (!dateString) return '';
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      month: 'short', 
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
       day: 'numeric',
       year: 'numeric'
     });
@@ -195,7 +253,7 @@ export default function Groups() {
             </div>
             <h3 className="text-lg font-medium text-red-800 mb-2">Error</h3>
             <p className="text-red-700 mb-4">{error}</p>
-            <button 
+            <button
               onClick={fetchGroups}
               className="bg-teal-600 text-white px-6 py-2 rounded-lg hover:bg-teal-700 font-medium"
             >
@@ -253,10 +311,18 @@ export default function Groups() {
                         <p className="text-sm text-gray-600">{group.usersList?.length || 0} members</p>
                       </div>
                     </div>
-                    <Trash2
-                      onClick={() => handleDelete(group.id)}
-                      className="w-5 h-5 text-red-500 hover:text-red-700 cursor-pointer"
-                    />
+                    <div className="flex items-center space-x-2">
+                      <Edit
+                        onClick={() => handleEditGroup(group)}
+                        className="w-5 h-5 text-blue-500 hover:text-blue-700 cursor-pointer"
+                        title="Edit group"
+                      />
+                      <Trash2
+                        onClick={() => handleDelete(group.id)}
+                        className="w-5 h-5 text-red-500 hover:text-red-700 cursor-pointer"
+                        title="Delete group"
+                      />
+                    </div>
                   </div>
 
                   <div className="space-y-3">
@@ -350,6 +416,7 @@ export default function Groups() {
         </div>
       )}
 
+      {/* Create Group Modal */}
       {showModal && location.pathname === '/groups' && (
         <div className="fixed inset-0 z-[9999] bg-black/40 flex items-center justify-center p-4">
           <div className="bg-white p-6 rounded-lg w-full max-w-md space-y-4 shadow-xl max-h-[90vh] overflow-y-auto">
@@ -383,9 +450,9 @@ export default function Groups() {
                       disabled={idx === 0 && !isCurrentUserEditable}
                     />
                     {idx !== 0 && (
-                      <button 
-                        type="button" 
-                        onClick={() => removeUserField(idx)} 
+                      <button
+                        type="button"
+                        onClick={() => removeUserField(idx)}
                         className="text-red-500 hover:text-red-700 p-1 ml-1"
                         title="Remove member"
                       >
@@ -398,17 +465,104 @@ export default function Groups() {
               <button type="button" onClick={addUserField} className="text-teal-600 hover:underline text-sm mt-1">+ Add another member</button>
             </div>
             <div className="flex justify-end space-x-3 pt-2">
-              <button 
-                onClick={() => setShowModal(false)} 
+              <button
+                onClick={() => setShowModal(false)}
                 className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md transition-colors"
               >
                 Cancel
               </button>
-              <button 
-                onClick={handleCreateGroup} 
+              <button
+                onClick={handleCreateGroup}
                 className="bg-teal-600 text-white px-4 py-2 rounded-md text-sm hover:bg-teal-700 transition-colors"
               >
                 Create
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Group Modal */}
+      {showEditModal && editingGroup && (
+        <div className="fixed inset-0 z-[9999] bg-black/40 flex items-center justify-center p-4">
+          <div className="bg-white p-6 rounded-lg w-full max-w-md space-y-4 shadow-xl max-h-[90vh] overflow-y-auto">
+            <h2 className="text-lg font-semibold text-gray-900">Edit Group: {editingGroup.name}</h2>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Group Name</label>
+              <input
+                type="text"
+                value={newGroupName}
+                onChange={(e) => setNewGroupName(e.target.value)}
+                placeholder="Enter group name"
+                className="w-full border border-gray-300 rounded-md px-4 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+              <textarea
+                value={newGroupDescription}
+                onChange={(e) => setNewGroupDescription(e.target.value)}
+                placeholder="Enter group description"
+                rows="3"
+                className="w-full border border-gray-300 rounded-md px-4 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">Group Members</label>
+              {users.map((u, idx) => (
+                <div key={idx} className="space-y-2 mb-3">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="text"
+                      value={u.name}
+                      onChange={e => handleUserChange(idx, 'name', e.target.value)}
+                      placeholder="Name"
+                      className="border border-gray-300 rounded-md px-3 py-2 flex-1 text-sm"
+                    />
+                    <input
+                      type="email"
+                      value={u.mail}
+                      onChange={e => handleUserChange(idx, 'mail', e.target.value)}
+                      placeholder="Email"
+                      className="border border-gray-300 rounded-md px-3 py-2 flex-1 text-sm"
+                    />
+                    {users.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeUserField(idx)}
+                        className="text-red-500 hover:text-red-700 p-1 ml-1"
+                        title="Remove member"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+              <button type="button" onClick={addUserField} className="text-teal-600 hover:underline text-sm mt-1">+ Add another member</button>
+            </div>
+
+            <div className="flex justify-end space-x-3 pt-2">
+              <button
+                onClick={() => {
+                  setShowEditModal(false);
+                  setEditingGroup(null);
+                  setNewGroupName('');
+                  setNewGroupDescription('');
+                  setUsers([{ name: user?.name || '', mail: user?.mail || '' }]);
+                }}
+                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUpdateGroup}
+                className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700 transition-colors"
+              >
+                Update
               </button>
             </div>
           </div>

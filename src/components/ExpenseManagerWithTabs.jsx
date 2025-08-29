@@ -3,7 +3,6 @@ import {
   Plus, 
   Edit, 
   Trash2, 
-  DollarSign, 
   Users, 
   Calendar,
   Tag,
@@ -11,13 +10,16 @@ import {
   Repeat,
   Save,
   X,
-  Filter
+  Filter,
+  IndianRupee,
+  CheckSquare,
+  Square
 } from 'lucide-react';
 import { addExpense, getExpenses } from '../services/expenseService';
-import { getAllUsers } from '../services/userService';
+import { getGroups } from '../services/groupService';
 import { useAuth } from '../contexts/AuthContext';
 
-export default function ExpenseManagerWithTabs({ groupId, onExpenseAdded }) {
+export default function ExpenseManagerWithTabs({ groupId, onExpenseAdded, openAddModal, onAddModalClose }) {
   const { user } = useAuth();
   const [expenses, setExpenses] = useState([]);
   const [users, setUsers] = useState([]);
@@ -26,6 +28,7 @@ export default function ExpenseManagerWithTabs({ groupId, onExpenseAdded }) {
   const [showModal, setShowModal] = useState(false);
   const [editingExpense, setEditingExpense] = useState(null);
   const [activeTab, setActiveTab] = useState('all'); // 'all', 'recurring', 'one-time'
+  const [selectedMemberIds, setSelectedMemberIds] = useState([]);
   const [newExpense, setNewExpense] = useState({
     groupID: groupId,
     amount: '',
@@ -40,13 +43,6 @@ export default function ExpenseManagerWithTabs({ groupId, onExpenseAdded }) {
     nextDueDate: '',
     userSplit: []
   });
-
-  const splitTypes = [
-    { value: 'EQUAL', label: 'Split Equally' },
-    { value: 'PERCENTAGE', label: 'Split by Percentage' },
-    { value: 'EXACT', label: 'Split by Exact Amount' },
-    { value: 'SHARES', label: 'Split by Shares' }
-  ];
 
   const categories = [
     'Food & Dining',
@@ -71,15 +67,28 @@ export default function ExpenseManagerWithTabs({ groupId, onExpenseAdded }) {
     fetchData();
   }, [groupId]);
 
+  // Allow parent to open the modal
+  useEffect(() => {
+    if (openAddModal) {
+      setShowModal(true);
+    }
+  }, [openAddModal]);
+
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [expensesRes, usersRes] = await Promise.all([
+      const [expensesRes, groupsRes] = await Promise.all([
         getExpenses(groupId),
-        getAllUsers()
+        getGroups()
       ]);
       setExpenses(expensesRes.data || []);
-      setUsers(usersRes.data || []);
+
+      // Find the current group and set members as users
+      const groups = groupsRes.data || [];
+      const currentGroup = groups.find(g => g.id === groupId);
+      const groupUsers = currentGroup?.usersList || [];
+      setUsers(groupUsers);
+      setSelectedMemberIds(groupUsers.map(u => u.id)); // default select all group members
     } catch (err) {
       setError('Failed to fetch data');
       console.error('Error fetching data:', err);
@@ -107,23 +116,38 @@ export default function ExpenseManagerWithTabs({ groupId, onExpenseAdded }) {
     return { recurring, oneTime, total };
   };
 
+  const handleToggleMember = (id) => {
+    setSelectedMemberIds((prev) =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAll = () => setSelectedMemberIds(users.map(u => u.id));
+  const handleDeselectAll = () => setSelectedMemberIds([]);
+
   const handleCreateExpense = async () => {
     if (!newExpense.amount || !newExpense.description) {
       setError('Please fill in all required fields');
       return;
     }
 
+    if (selectedMemberIds.length === 0) {
+      setError('Select at least one member to split with');
+      return;
+    }
+
     try {
-      // Prepare user split data based on split type
-      const userSplitData = users.map(u => ({
-        userId: u.id,
-        amount: newExpense.splitType === 'EQUAL' ? null : 0,
-        percentage: newExpense.splitType === 'PERCENTAGE' ? 100 / users.length : null,
-        shares: newExpense.splitType === 'SHARES' ? 1 : null
+      // Equal split among selected members
+      const userSplitData = selectedMemberIds.map(id => ({
+        userId: id,
+        amount: null,
+        percentage: null,
+        shares: null
       }));
 
       const expenseData = {
         ...newExpense,
+        splitType: 'EQUAL',
         userSplit: userSplitData
       };
 
@@ -158,7 +182,6 @@ export default function ExpenseManagerWithTabs({ groupId, onExpenseAdded }) {
     }
 
     try {
-      // Note: Update endpoint doesn't exist in backend yet
       setError('Update functionality not available yet');
       setEditingExpense(null);
     } catch (err) {
@@ -170,7 +193,6 @@ export default function ExpenseManagerWithTabs({ groupId, onExpenseAdded }) {
   const handleDeleteExpense = async (expenseId) => {
     if (window.confirm('Are you sure you want to delete this expense?')) {
       try {
-        // Note: Delete endpoint doesn't exist in backend yet
         setError('Delete functionality not available yet');
       } catch (err) {
         setError('Failed to delete expense');
@@ -180,8 +202,8 @@ export default function ExpenseManagerWithTabs({ groupId, onExpenseAdded }) {
   };
 
   const getUserName = (userId) => {
-    const user = users.find(u => u.id === userId);
-    return user ? user.name : 'Unknown User';
+    const u = users.find(u => u.id === userId);
+    return u ? u.name : 'Unknown User';
   };
 
   const getIntervalLabel = (interval) => {
@@ -293,7 +315,7 @@ export default function ExpenseManagerWithTabs({ groupId, onExpenseAdded }) {
           <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
             <div className="flex items-center">
               <div className="p-2 bg-green-100 rounded-lg">
-                <DollarSign className="w-6 h-6 text-green-600" />
+                <IndianRupee className="w-6 h-6 text-green-600" />
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Monthly Total</p>
@@ -327,21 +349,15 @@ export default function ExpenseManagerWithTabs({ groupId, onExpenseAdded }) {
       {/* Expenses List */}
       {filteredExpenses.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-lg shadow border border-gray-200">
-          <DollarSign className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+          <IndianRupee className="w-16 h-16 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">
             {activeTab === 'recurring' ? 'No recurring expenses yet' : 
              activeTab === 'one-time' ? 'No one-time expenses yet' : 'No expenses yet'}
           </h3>
-          <p className="text-gray-600 mb-4">
+          <p className="text-gray-600 mb-0">
             {activeTab === 'recurring' ? 'Create your first recurring expense to start tracking' :
              activeTab === 'one-time' ? 'Add your first one-time expense' : 'Add your first expense to start tracking'}
           </p>
-          <button
-            onClick={() => setShowModal(true)}
-            className="bg-teal-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-teal-700"
-          >
-            Add Expense
-          </button>
         </div>
       ) : (
         <div className="space-y-4">
@@ -360,7 +376,7 @@ export default function ExpenseManagerWithTabs({ groupId, onExpenseAdded }) {
                   </div>
                   <div className="flex items-center space-x-4 text-sm text-gray-600">
                     <span className="flex items-center">
-                      <DollarSign className="w-4 h-4 mr-1" />
+                      <IndianRupee className="w-4 h-4 mr-1" />
                       ₹{expense.amount}
                     </span>
                     <span className="flex items-center">
@@ -422,6 +438,7 @@ export default function ExpenseManagerWithTabs({ groupId, onExpenseAdded }) {
                   onClick={() => {
                     setShowModal(false);
                     setEditingExpense(null);
+                    onAddModalClose && onAddModalClose();
                   }}
                   className="text-gray-400 hover:text-gray-600"
                 >
@@ -452,26 +469,6 @@ export default function ExpenseManagerWithTabs({ groupId, onExpenseAdded }) {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Amount *
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={editingExpense?.amount || newExpense.amount}
-                      onChange={(e) => {
-                        if (editingExpense) {
-                          setEditingExpense({...editingExpense, amount: e.target.value});
-                        } else {
-                          setNewExpense({...newExpense, amount: e.target.value});
-                        }
-                      }}
-                      className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                      placeholder="0.00"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
                       Category
                     </label>
                     <select
@@ -494,6 +491,26 @@ export default function ExpenseManagerWithTabs({ groupId, onExpenseAdded }) {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Amount *
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={editingExpense?.amount || newExpense.amount}
+                      onChange={(e) => {
+                        if (editingExpense) {
+                          setEditingExpense({...editingExpense, amount: e.target.value});
+                        } else {
+                          setNewExpense({...newExpense, amount: e.target.value});
+                        }
+                      }}
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      placeholder="0.00"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
                       Paid By
                     </label>
                     <select
@@ -507,29 +524,8 @@ export default function ExpenseManagerWithTabs({ groupId, onExpenseAdded }) {
                       }}
                       className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
                     >
-                      {users.map(user => (
-                        <option key={user.id} value={user.id}>{user.name}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Split Type
-                    </label>
-                    <select
-                      value={editingExpense?.splitType || newExpense.splitType}
-                      onChange={(e) => {
-                        if (editingExpense) {
-                          setEditingExpense({...editingExpense, splitType: e.target.value});
-                        } else {
-                          setNewExpense({...newExpense, splitType: e.target.value});
-                        }
-                      }}
-                      className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                    >
-                      {splitTypes.map(type => (
-                        <option key={type.value} value={type.value}>{type.label}</option>
+                      {users.map(u => (
+                        <option key={u.id} value={u.id}>{u.name}</option>
                       ))}
                     </select>
                   </div>
@@ -551,6 +547,40 @@ export default function ExpenseManagerWithTabs({ groupId, onExpenseAdded }) {
                       className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
                     />
                   </div>
+                </div>
+
+                {/* Equal split member selection */}
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-sm font-semibold text-gray-900 flex items-center">
+                      <Users className="w-4 h-4 mr-2" />
+                      Select Members to Split With
+                    </h4>
+                    <div className="text-sm">
+                      <button onClick={handleSelectAll} className="text-teal-600 hover:underline mr-2">Select All</button>
+                      <button onClick={handleDeselectAll} className="text-teal-600 hover:underline">Deselect All</button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {users.map(u => {
+                      const selected = selectedMemberIds.includes(u.id);
+                      return (
+                        <button
+                          type="button"
+                          key={u.id}
+                          onClick={() => handleToggleMember(u.id)}
+                          className={`flex items-center justify-between w-full px-3 py-3 rounded border ${selected ? 'border-teal-400 bg-teal-50' : 'border-gray-200 bg-white'}`}
+                        >
+                          <span className="flex items-center space-x-2">
+                            {selected ? <CheckSquare className="w-4 h-4 text-teal-600" /> : <Square className="w-4 h-4 text-gray-400" />}
+                            <span className="font-medium text-gray-900">{u.name}</span>
+                          </span>
+                          <span className="text-xs text-gray-500">{selected ? 'Selected' : 'Tap to select'}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-gray-600 mt-2">Selected {selectedMemberIds.length} of {users.length} members</p>
                 </div>
 
                 <div>
@@ -640,6 +670,7 @@ export default function ExpenseManagerWithTabs({ groupId, onExpenseAdded }) {
                   onClick={() => {
                     setShowModal(false);
                     setEditingExpense(null);
+                    onAddModalClose && onAddModalClose();
                   }}
                   className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
                 >

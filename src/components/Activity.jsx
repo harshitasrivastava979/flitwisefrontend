@@ -1,7 +1,5 @@
 import { 
   Users,  
-  DollarSign,
-  Receipt,
   Calendar,
   Filter,
   Search,
@@ -9,7 +7,9 @@ import {
   TrendingUp,
   TrendingDown,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  IndianRupee,
+  Receipt
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { getExpenses } from "../services/expenseService";
@@ -323,7 +323,7 @@ export default function Activity() {
         <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
           <div className="flex items-center">
             <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-              <DollarSign className="w-6 h-6 text-green-600" />
+              <IndianRupee className="w-6 h-6 text-green-600" />
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-600">Total Spent</p>
@@ -389,7 +389,7 @@ export default function Activity() {
                   </div>
                   <div className="flex items-center space-x-4 text-sm text-gray-600 mb-2">
                     <span className="flex items-center">
-                      <DollarSign className="w-4 h-4 mr-1" />
+                      <IndianRupee className="w-4 h-4 mr-1" />
                       ₹{item.amount || 0}
                     </span>
                     {item.groupName && (

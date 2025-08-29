@@ -1,11 +1,11 @@
 import React from 'react';
 import { 
-  DollarSign, 
   TrendingUp, 
   AlertTriangle, 
   CheckCircle,
   Calendar,
-  Users
+  Users,
+  IndianRupee
 } from 'lucide-react';
 
 export default function BudgetSummary({ summary, exceededBudgets, nearingLimitBudgets }) {
@@ -32,7 +32,7 @@ export default function BudgetSummary({ summary, exceededBudgets, nearingLimitBu
         <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
           <div className="flex items-center">
             <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-              <DollarSign className="w-6 h-6 text-blue-600" />
+              <IndianRupee className="w-6 h-6 text-blue-600" />
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-600">Total Budget</p>
@@ -56,7 +56,7 @@ export default function BudgetSummary({ summary, exceededBudgets, nearingLimitBu
         <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6">
           <div className="flex items-center">
             <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-              <DollarSign className="w-6 h-6 text-purple-600" />
+              <IndianRupee className="w-6 h-6 text-purple-600" />
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-600">Remaining</p>
