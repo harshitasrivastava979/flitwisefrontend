@@ -92,7 +92,7 @@ export default function LoginPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
             <div className="flex items-center">
-              <div className="text-2xl font-bold text-teal-600">Flitwise</div>
+              <div className="text-2xl font-bold text-teal-600">FinSight</div>
             </div>
             <div className="flex space-x-4">
               <button
@@ -224,7 +224,7 @@ export default function LoginPage() {
           {/* Footer text */}
           <div className="mt-8 text-center">
             <p className="text-sm text-gray-600">
-              Track budgets and understand where your money is going with Flitwise.
+              Track budgets and understand where your money is going with FinSight.
             </p>
           </div>
         </div>
